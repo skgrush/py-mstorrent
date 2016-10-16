@@ -11,10 +11,7 @@ import datetime
 from ipaddress import IPv4Address
 
 peer_update_interval = 15 * 60 #15 minutes by default
-"""Peers will be forgotten after this many seconds.
-
-You can change this during runtime.
-"""
+"""Peers will be forgotten after this many seconds."""
 
 
 _re_md5 = re.compile('^[0-9a-f]{32}$', re.A|re.I)
