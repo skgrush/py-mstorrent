@@ -3,6 +3,9 @@
 """Abstraction and handling of .track files.
 """
 
+__license__ = "MIT"
+__docformat__ = 'reStructuredText'
+
 import re
 import datetime
 from ipaddress import IPv4Address
@@ -34,19 +37,19 @@ class trackerfile(tuple):
     _fields = tuple( ( n.lower() for n in _metadata_fields ) )
     
     def __new__(cls, filename, filesize, description, md5):
-        """Default trackerfile constructor.
+        """Default :class:`trackerfile` constructor.
         
-        Alternative constructors :method:`~trackerfile.fromPath` and 
-            :method:`~trackerfile.fromFileObject` are available.
+        Alternative constructors :meth:`~.trackerfile.fromPath` and 
+            :meth:`~.trackerfile.fromFileObject` are available.
         
         :param str filename: Name of the file being tracked
         :param int filesize: Size in bytes of the file
         :param str description: Description of the file
         :param str md5: MD5 hash of the file
-        :return: A new trackerfile instance
+        :returns: A new :class:`trackerfile` instance
         :rtype: trackerfile
-        :raise ValueError: if the value of an argument isn't acceptable
-        :raise TypeError: if the value of an argument is drastically wrong
+        :raises ValueError: if the value of an argument isn't acceptable
+        :raises TypeError: if the value of an argument is drastically wrong
         """
         
         if not _re_md5.match(md5):
@@ -79,14 +82,14 @@ class trackerfile(tuple):
     
     @classmethod
     def fromPath(cls, filepath):
-        """Create a new trackerfile instance from a .track file.
+        """Create a new :class:`trackerfile` instance from a .track file.
         
         :param str filepath: Path to the .track file.
-        :return: A new trackerfile instance
+        :returns: A new :class:`trackerfile` instance
         :rtype: trackerfile
-        :raise TypeError: if filepath is an incompatible type
-        :raise OSError: if there is a problem reading from filepath
-        :raise: All exceptions raisable by :method:`~trackerfile.fromFileObject`
+        :raises TypeError: if *filepath* is an incompatible type
+        :raises OSError: if there is a problem reading from *filepath*
+        :raises: All exceptions raisable by :meth:`~.trackerfile.fromFileObject`
         """
         
         with open(filepath, 'r', encoding=_DEFAULT_ENCODING) as fl:
@@ -95,19 +98,20 @@ class trackerfile(tuple):
     
     @classmethod
     def fromFileObject(cls, fileobj, ignorelines=""):
-        """Create a new trackerfile instance from a .track file.
+        """Create a new :class:`trackerfile` instance from a .track file.
         
-        :param fileobj: A file-like object containing a .track file.
+        :param fileobj: Stream containing a .track file.
+        :type fileobj: file-like object
         :param ignorelines: should contain characters that, if a line starts
             with them, will cause the line to be ignored.
         :type ignorelines: str or None
-        :return: a new trackerfile instance
+        :returns: a new :class:`trackerfile` instance
         :rtype: trackerfile
-        :raise MalformedTrackerFileException: if the file is malformed
-        :raise RuntimeError: if something unexpected happens
-        :raise ValueError: if fileobj is closed
-        :raise TypeError: if an argument is of an incompatible type
-        :raise: All exceptions raisable by :method:`~trackerfile.parseLine`
+        :raises MalformedTrackerFileException: if the file is malformed
+        :raises RuntimeError: if something unexpected happens
+        :raises ValueError: if *fileobj* is closed
+        :raises TypeError: if an argument is of an incompatible type
+        :raises: All exceptions raisable by :meth:`~.trackerfile.parseLine`
         """
         
         metadata = {}
@@ -162,23 +166,23 @@ class trackerfile(tuple):
     def parseLine(cls, line, ignorelines=""):
         """Parses a line of a .track file.
         
-        Essentially calls parseMetadata(), parsePeer(), or passes based on line
-        content.
+        Essentially calls :meth:`~.trackerfile.parseMetadata`, 
+        :meth:`~.trackerfile.parsePeer`, or passes based on line content.
         
         By default, ignores (returns None for) lines starting with '#'. Will
-        additionally ignore lines starting with any character in ignorelines.
+        additionally ignore lines starting with any character in *ignorelines*.
         
         :param str line: .track file line to be parsed
         :param str ignorelines: should contain characters that, if a line starts
             with them, will cause the line to be ignored.
-        :return: a 2-tuple (for a metadata line), a 5-tuple (for a peer line),
+        :returns: a 2-tuple (for a metadata line), a 5-tuple (for a peer line),
             or None (for a pass line).
         :rtype: tuple or None
-        :raise AttributeError: if line isn't a string
-        :raise TypeError: if ignorelines isn't iterable
-        :raise RuntimeError: if an unexpected state is reached
-        :raise: all exceptions raisable by :method:`~trackerfile.parseMetadata`
-            and :method:`~trackerfile.parsePeer`
+        :raises AttributeError: if *line* isn't a string
+        :raises TypeError: if *ignorelines* isn't iterable
+        :raises RuntimeError: if an unexpected state is reached
+        :raises: all exceptions raisable by :meth:`~.trackerfile.parseMetadata`
+            and :meth:`~.trackerfile.parsePeer`
         """
         
         line = line.strip()
@@ -203,11 +207,11 @@ class trackerfile(tuple):
         """Parses a metadata line of a .track file.
         
         :param str line: metadata line to be parsed
-        :return: ( str attr, str|int value ) where attr is “filename”, 
-            ”filesize”, ”description”, or ”md5”
+        :returns: ( :class:`str` *attr*, :class:`str`|:class:`int` *value* )
+            where attr is “filename”, ”filesize”, ”description”, or ”md5”
         :rtype: tuple
-        :raise MalformedTrackerFileException: if the line is malformed
-        :raise TypeError, AttributeError: if line isn't a string
+        :raises MalformedTrackerFileException: if *line* is malformed
+        :raises TypeError, AttributeError: if *line* isn't a string
         """
         if ':' not in line:
             raise MalformedTrackerFileException("Invalid metadata line.")
@@ -236,13 +240,16 @@ class trackerfile(tuple):
         """Parses a peer line of a .track file.
         
         :param str line: peer line to be parsed
-        :return: ( IPv4Address peer_ip, int peer_port, int start_byte, 
-                  int end_byte, datetime.datetime last_timestamp )
+        :returns: ( :py:class:`~ipaddress.IPv4Address` *peer_ip*, 
+                    :class:`int` *peer_port*,
+                    :class:`int` *start_byte*,
+                    :class:`int` *end_byte*,
+                    :class:`~datetime.datetime` *last_timestamp* )
         :rtype: tuple
-        :raise MalformedTrackerFileException: if the peer line is malformed
-        :raise AttributeError: if line isn't a string
-        :raise AddressValueError: if the peer ip isn't a valid IPv4 address
-        :raise ValueError: if any of the components that should be ints aren't
+        :raises MalformedTrackerFileException: if the *line* is malformed
+        :raises AttributeError: if *line* isn't a string
+        :raises AddressValueError: if the peer ip isn't a valid IPv4 address
+        :raises ValueError: if any of the components that should be ints aren't
         """
         parts = line.split(':',4)
         
@@ -274,15 +281,16 @@ class trackerfile(tuple):
     
     
     def updatePeer(self, peer_ip, peer_port, start_byte, end_byte):
-        """Update or add peer-line for (peer_ip, peer_port) pair.
+        """Update or add peer-line for (*peer_ip*, *peer_port*) pair.
         
         :param IPv4Address peer_ip: The peer's IP address
         :param int peer_port: The peer's port
         :param int start_byte: The first byte the peer has
         :param int end_byte: The last byte the peer has
-        :raise AddressValueError: if peer_ip isn't a valid IPv4 address
-        :raise ValueError, TypeError: if peer_port, start_byte, or end_byte
-            aren't ints, or start_byte and end_byte form an invalid range
+        :raises AddressValueError: if *peer_ip* isn't a valid IPv4 address
+        :raises ValueError, TypeError: if *peer_port*, *start_byte*, or
+            *end_byte* aren't ints, or *start_byte* and *end_byte* form an
+            invalid range
         """
         
         peer = IPv4Address(peer_ip),int(peer_port)
@@ -296,14 +304,14 @@ class trackerfile(tuple):
     
     
     def removePeer(self, peer_ip, peer_port):
-        """Remove (peer_ip, peer_port) pair if it exists.
+        """Remove (*peer_ip*, *peer_port*) pair if it exists.
         
         :param IPv4Address peer_ip: IP of peer to be removed
         :param int peer_port: port of peer to be removed
-        :return: True if pair was removed, False if pair not found.
+        :returns: True if pair was removed, False if pair not found.
         :rtype: bool
-        :raise AddressValueError: if peer_ip isn't a valid IPv4 address
-        :raise TypeError,ValueError: if peer_port isn't an int
+        :raises AddressValueError: if *peer_ip* isn't a valid IPv4 address
+        :raises TypeError,ValueError: if *peer_port* isn't an int
         """
         
         peer = IPv4Address(peer_ip),int(peer_port)
@@ -335,7 +343,7 @@ class trackerfile(tuple):
     def toString(self):
         """Output as .track file format.
         
-        :return: The tracker file in the .track file format.
+        :returns: The tracker file in the .track file format.
         :rtype: str
         """
         output = "\n".join( self._metadataGenerator() )
@@ -344,13 +352,13 @@ class trackerfile(tuple):
     
     
     def writeTo(self, fileobj):
-        """Writes the tracker file to fileobj in the .track file format.
+        """Writes the tracker file to *fileobj* in the .track file format.
         
-        Does not close fileobj. Only requires fileobj.write() method.
+        Does not close *fileobj*. Only requires ``fileobj.write()`` method.
         
         :param fileobj: The file to be written to
         :type fileobj: file-like object
-        :raise OSError,ValueError,AttributeError: If fileobj isn't writable
+        :raises OSError,ValueError,AttributeError: If *fileobj* isn't writable
         """
         
         #write metadata
