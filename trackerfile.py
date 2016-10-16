@@ -31,7 +31,7 @@ class trackerfile(tuple):
     
     _metadata_fields = ('Filename', 'Filesize', 'Description', 'MD5')
     
-    _fields = ( *( n.lower() for n in _metadata_fields ) )
+    _fields = tuple( ( n.lower() for n in _metadata_fields ) )
     
     def __new__(cls, filename, filesize, description, md5):
         """Default trackerfile constructor.
@@ -136,7 +136,7 @@ class trackerfile(tuple):
                 
                 if peer in peers and peers[peer] != values:
                     raise MalformedTrackerFileException("Duplicate peer entry" \
-                        " for peer {0[0]}:{0[1]}".format(peer)
+                        " for peer {0[0]}:{0[1]}".format(peer) )
                 
                 peers[peer] = values
             
