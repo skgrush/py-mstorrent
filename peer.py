@@ -12,7 +12,7 @@ import threading
 import trackerfile
 
 thost = '127.0.0.1'
-tport = 10000
+tport = 9999
 myip = None
 
 # Put these in a config
@@ -71,8 +71,21 @@ class interpreter(cmd.Cmd):
         self.stdout = self
         pass
 
+    def str_to_args(string):
+        import re
+        matches = re.finditer('(?P<quote>[\'\"]).*?(?P=quote)', string)
+
+        for match in matches:
+            string = string.replace(match.group(), match.group().replace(" ", "%20"))
+        args = string.split(" ")
+
+        for i in range(len(args)):
+            args[i] = args[i].replace("%20", " ").replace("\"", "").replace("\'", "")
+
+        return args
+
     def do_help(self, line):
-        x = cmds["help"].parse_args(line.split(" "))
+        x = cmds["help"].parse_args(interpreter.str_to_args(line))
 
         if not line:
             for command in cmds:
@@ -87,7 +100,8 @@ class interpreter(cmd.Cmd):
 
 
     def do_createtracker(self, line):
-        x = cmds["createtracker"].parse_args(line.split(" "))
+        x = cmds["createtracker"].parse_args(interpreter.str_to_args(line))
+        x.fname, x.descrip = apiutils.arg_encode(x.fname), apiutils.arg_encode(x.descrip)
         self.write("Creating tracker file for {}".format(x.fname))
         fsize, fmd5 = peer.createtracker(x.fname, x.descrip)
         if fsize > 0:
@@ -95,10 +109,10 @@ class interpreter(cmd.Cmd):
             self.write(message)
             response = peer.send(peer, (x.host or thost), (x.port or tport), message, self.message_queue)
         else:
-            self.write("Unable to find file {}".format(x.fname))
+            self.write("Unable to find file {} or file is empty".format(x.fname))
 
     def do_updatetracker(self, line):
-        args = line.split(" ")
+        args = interpreter.str_to_args(line)
         if len(args) == 3:
             response = peer.send(peer, thost, tport, "<updatetracker {} {} {}>".format(args[0], args[1], args[2], ), self.message_queue)
             self.write(response)
@@ -109,7 +123,7 @@ class interpreter(cmd.Cmd):
         self.write(line)
 
     def do_REQ(self, line):
-        args = line.split(" ")
+        args = interpreter.str_to_args(line)
         host, port = thost, tport
         if len(args) == 1 and args[0]:
             host = args[0]

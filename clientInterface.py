@@ -70,6 +70,7 @@ class clientInterface():
 
             # Enter Key
             elif k == 10 or k == curses.KEY_ENTER:
+                self.queue.put(input_str)
                 if input_str.lower() in ("quit", "exit"):
                     self.queue.put("Received EXIT signal, waiting on remaining processes...")
                     break
