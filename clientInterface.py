@@ -16,10 +16,10 @@ class clientInterface():
     def __init__(self, stdscr, commands):
         y, x, = stdscr.getmaxyx()
         self.scrolly, self.scrollx = 0, 0
-        self.py, self.px = 100*y, 2*x
+        self.py, self.px = 100*y, x
         self.stdscr = stdscr
         self.user_input = curses.newwin(1, x, y-1, 0)
-        self.pad = curses.newpad(100*y, 2*x)
+        self.pad = curses.newpad(self.py, self.px)
         self.linecount = 0
 
         self.queue = multiprocessing.Queue()
