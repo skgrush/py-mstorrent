@@ -256,8 +256,11 @@ class interpreter(cmd.Cmd):
 
         if not line:
             self.write(cmds["help"].format_help().replace("peer.py", "help"))
+            commands = ""
             for command in cmds:
-                self.write(command + "\t" + cmds[command].description)
+                commands += command + "\t\t"
+                #self.write(command + "\t" + cmds[command].description)
+            self.write(commands)
         else:
             if x.command in cmds:
                 c = cmds[x.command]
@@ -290,7 +293,7 @@ class interpreter(cmd.Cmd):
 
     def do_gettracker(self, line):
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
-        self.write("Retreiving tracker file for {}".format(parse.fname))
+        peer.send(peer, parse.host or thost, parse.port or tport, "<GET {}.track>".format(apiutils.arg_encode(parse.fname)), self.message_queue)
 
 
     def do_GET(self, line):
@@ -340,11 +343,13 @@ cmds["createtracker"].add_argument("-port", type=int, help="Tracker port")
 cmds["REQ"].add_argument("host", type=str, help="Tracker ip", nargs="?")
 cmds["REQ"].add_argument("port", type=int, help="Tracker port", nargs="?")
 cmds["gettracker"].add_argument("fname", type=str, help="Name of tracker file")
+cmds["gettracker"].add_argument("-host", type=str, help="IP address of tracker server", nargs="?")
+cmds["gettracker"].add_argument("-port", type=int, help="Port number of tracker server", nargs="?")
 cmds["GET"].add_argument("fname", type=str, help="Name of file")
 cmds["GET"].add_argument("start_byte", type=int, help="Start byte")
 cmds["GET"].add_argument("chunk_size", type=int, help="Number of bytes to retreive")
-cmds["GET"].add_argument("host", type=str, help="Tracker ip")
-cmds["GET"].add_argument("port", type=int, help="Tracker port")
+cmds["GET"].add_argument("host", type=str, help="Peer ip")
+cmds["GET"].add_argument("port", type=int, help="Peer port")
 
 
 def main(stdscr):

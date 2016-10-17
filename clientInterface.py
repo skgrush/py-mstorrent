@@ -99,7 +99,7 @@ class clientInterface():
                 try:
                     input_str += chr(k)
                 except Exception:
-                    queue.put(k)
+                    queue.put(str(k))
 
             # Bound scroll area
             self.scrollx = max(min(self.px - x, self.scrollx), 0)
