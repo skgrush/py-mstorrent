@@ -13,7 +13,7 @@ def f(q):
 
 class clientInterface():
 
-    def __init__(self, stdscr, commands):
+    def __init__(self, stdscr, commands, args):
         y, x, = stdscr.getmaxyx()
         self.scrolly, self.scrollx = 0, 0
         self.py, self.px = 100*y, x
@@ -27,6 +27,7 @@ class clientInterface():
         self.inp = threading.Thread(name="input_recv", target=self.input_loop)
         self.receiver = threading.Thread(name="msg_recv", target=self.writer, daemon=True)
         self.commands = commands
+        self.args = args
 
     def begin(self):
         self.inp.start()
@@ -120,17 +121,17 @@ class clientInterface():
 
         y, x = self.stdscr.getmaxyx()
         py, px = self.pad.getmaxyx()
+        for line in msg.strip("\r\n").split("\n"):
+            try:
+                self.pad.addstr(self.linecount % (py - 1), 0, str(line))
+                self.linecount += 1 + int(len(line) / px)
 
-        try:
-            self.pad.addstr(self.linecount % (py - 1), 0, str(msg))
-            self.linecount += 1 + int(len(msg) / px)
+                if self.linecount == y + self.scrolly:
+                    self.scrolly += 1
 
-            if self.linecount == y + self.scrolly:
-                self.scrolly += 1
-
-            self.draw_pad()
-        except Exception as err:
-            self.write_msg(str(err))
+                self.draw_pad()
+            except Exception as err:
+                self.write_msg(str(err))
 
 
     def send_command(self, msg):

@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 
 from clientInterface import *
+import apiutils
+import argparse
 import cmd
 import curses
+import hashlib
+import os
 import socket
 import threading
-import urllib.parse
+import trackerfile
 
-thost = 'localhost'
-tport = 666
+thost = '127.0.0.1'
+tport = 10000
 myip = None
+
+# Put these in a config
+FILE_DIRECTORY = "torrents/"
+CHUNK_SIZE = 1024
 
 class peer():
     def __init__(self, message_queue):
@@ -18,6 +26,24 @@ class peer():
     # Spawns new threads for each tracker file
     def spawn_threads(self):
         pass
+
+    def createtracker(filename, description):
+        try:
+            size = os.path.getsize(FILE_DIRECTORY + filename)
+        except Exception as err:
+            print(err)
+            return (0, 0)
+
+        try:
+            md5 = hashlib.md5()
+            with open(FILE_DIRECTORY + filename, "rb") as f:
+                for chunk in iter(lambda: f.read(CHUNK_SIZE), b""):
+                    md5.update(chunk)
+        except Exception as err:
+            print(err)
+            return(0, 0)
+
+        return (size, md5.hexdigest())
 
     def send(self, ip, port, message, queue):
         global myip
@@ -28,45 +54,54 @@ class peer():
             return
 
         s.connect((ip, int(port)))
-        s.send(bytes(urllib.parse.quote_plus(message), "UTF-8"))
+        s.send(bytes((message), *apiutils.encoding_defaults))
         myip = s.getsockname()[0]
-        peer.write(myip, queue)
         resp = s.recv(4096)
         s.close()
 
-        peer.write("Response: " + resp.decode("UTF-8"), queue)
-        return resp.decode("UTF-8")
+        peer.write(resp.decode(*apiutils.encoding_defaults), queue)
+        return resp.decode(*apiutils.encoding_defaults)
 
     def write(message, queue):
         queue.put(str(message))
 
 
-
-
 class interpreter(cmd.Cmd):
     def __init__(self):
         self.stdout = self
+        pass
 
     def do_help(self, line):
-        self.write("Commands:")
+        x = cmds["help"].parse_args(line.split(" "))
 
-        methods = type(self).__dict__
-        for name in methods:
-            if name[0:3] == "do_":
-                self.write("  " + name[3:])
+        if not line:
+            for command in cmds:
+                self.write(command + "\t" + cmds[command].description)
+        else:
+            if x.command in cmds:
+                c = cmds[x.command]
+                self.write(c.format_help().replace("peer.py", x.command))
+            else:
+                self.write("Unknown command {}".format(x.command))
+            
+
 
     def do_createtracker(self, line):
-        args = line.split(" ")
-        if len(args) > 1:
-            self.write("Creating tracker file for {}".format(args[0]))
+        x = cmds["createtracker"].parse_args(line.split(" "))
+        self.write("Creating tracker file for {}".format(x.fname))
+        fsize, fmd5 = peer.createtracker(x.fname, x.descrip)
+        if fsize > 0:
+            message = "<createtracker {} {} {} {} {} {}>".format(x.fname, fsize, x.descrip, fmd5, myip, 1000)
+            self.write(message)
+            response = peer.send(peer, (x.host or thost), (x.port or tport), message, self.message_queue)
         else:
-            self.write("Usage: createtracker filename description")
+            self.write("Unable to find file {}".format(x.fname))
 
     def do_updatetracker(self, line):
         args = line.split(" ")
         if len(args) == 3:
-            self.write("Updating tracker file {} for bytes {} to {}".format(args[0], args[1], args[2]))
-            response = peer.send(peer, host, port, "<updatetracker {} {} {}>".format(args[0], args[1], args[2], ), self.message_queue)
+            response = peer.send(peer, thost, tport, "<updatetracker {} {} {}>".format(args[0], args[1], args[2], ), self.message_queue)
+            self.write(response)
         else:
             self.write("Usage: updatetracker filename start_bytes end_bytes")
 
@@ -75,7 +110,7 @@ class interpreter(cmd.Cmd):
 
     def do_REQ(self, line):
         args = line.split(" ")
-        host, port = 'localhost', 666
+        host, port = thost, tport
         if len(args) == 1 and args[0]:
             host = args[0]
         elif len(args) == 2:
@@ -83,15 +118,44 @@ class interpreter(cmd.Cmd):
         self.write("Requesting list of tracker files from tracker {}:{}".format(host, port))
         response = peer.send(peer, host, port, "<REQ LIST>", self.message_queue)
 
+    # stdout and stderr
     def write(self, msg):
         self.message_queue.put(str(msg))
         pass
+    def flush(self):
+        pass
+
+
+class cmdparser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ArgumentParserError(message)
+
+class ArgumentParserError(Exception):
+    pass
+
+cmds = {
+    "help" : cmdparser(description="Display this help page", add_help=False),
+    "createtracker" : cmdparser(description="Create a tracker file", add_help=False),
+    "updatetracker" : cmdparser(description="Update a tracker file", add_help=False),
+    "GET" : cmdparser(description="Retrieve a segment of a torrent file or a tracker file", add_help=False),
+    "REQ" : cmdparser(description="Request a list of tracker files", add_help=False)
+}
+
+cmds["help"].add_argument("command", type=str, metavar="command", nargs="?")
+cmds["createtracker"].add_argument("fname", type=str, help="Name of the file")
+cmds["createtracker"].add_argument("descrip", type=str, help="File description")
+cmds["createtracker"].add_argument("-host", type=str, help="Tracker ip")
+cmds["createtracker"].add_argument("-port", type=int, help="Tracker port")
+cmds["REQ"].add_argument("host", type=str, help="Tracker ip", nargs="?")
+cmds["REQ"].add_argument("port", type=int, help="Tracker port", nargs="?")
 
 def main(stdscr):
-    commands = interpreter()
+    commandline = interpreter()
 
-    cli = clientInterface(stdscr, commands)
-    commands.message_queue = cli.queue
+    cli = clientInterface(stdscr, commandline, cmds)
+    commandline.message_queue = cli.queue
+    sys.stdout = commandline
+    sys.stderr = commandline
     clientInterface.begin(cli)
 
     response = peer.send(peer, thost, tport, "<HELLO>", cli.queue)
