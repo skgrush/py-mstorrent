@@ -7,6 +7,10 @@ import socket
 import threading
 import urllib.parse
 
+thost = 'localhost'
+tport = 666
+myip = None
+
 class peer():
     def __init__(self, message_queue):
         self.message_queue = message_queue
@@ -16,6 +20,7 @@ class peer():
         pass
 
     def send(self, ip, port, message, queue):
+        global myip
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
@@ -24,6 +29,8 @@ class peer():
 
         s.connect((ip, int(port)))
         s.send(bytes(urllib.parse.quote_plus(message), "UTF-8"))
+        myip = s.getsockname()[0]
+        peer.write(myip, queue)
         resp = s.recv(4096)
         s.close()
 
@@ -59,6 +66,7 @@ class interpreter(cmd.Cmd):
         args = line.split(" ")
         if len(args) == 3:
             self.write("Updating tracker file {} for bytes {} to {}".format(args[0], args[1], args[2]))
+            response = peer.send(peer, host, port, "<updatetracker {} {} {}>".format(args[0], args[1], args[2], ), self.message_queue)
         else:
             self.write("Usage: updatetracker filename start_bytes end_bytes")
 
@@ -68,7 +76,7 @@ class interpreter(cmd.Cmd):
     def do_REQ(self, line):
         args = line.split(" ")
         host, port = 'localhost', 666
-        if len(args) == 1:
+        if len(args) == 1 and args[0]:
             host = args[0]
         elif len(args) == 2:
             host, port = args
@@ -76,7 +84,7 @@ class interpreter(cmd.Cmd):
         response = peer.send(peer, host, port, "<REQ LIST>", self.message_queue)
 
     def write(self, msg):
-        self.message_queue.put(msg)
+        self.message_queue.put(str(msg))
         pass
 
 def main(stdscr):
@@ -85,6 +93,8 @@ def main(stdscr):
     cli = clientInterface(stdscr, commands)
     commands.message_queue = cli.queue
     clientInterface.begin(cli)
+
+    response = peer.send(peer, thost, tport, "<HELLO>", cli.queue)
     cli.inp.join()
 
     curses.curs_set(0)
