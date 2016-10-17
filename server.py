@@ -67,7 +67,6 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
                 print("Bad Request: {}".format(err.args[0]))
                 return self.exception('BadRequest', err.args[0])
             
-            raise err
         
     
     def api_createtracker(self, fname, fsize, descrip, md5, ip, port):
