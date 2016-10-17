@@ -34,7 +34,7 @@ class trackerfile(tuple):
     _fields = tuple( ( n.lower() for n in _metadata_fields ) )
     
     def __new__(cls, filename, filesize, description, md5):
-        """Default :class:`trackerfile` constructor.
+        """Default :class:`.trackerfile` constructor.
         
         Alternative constructors :meth:`~.trackerfile.fromPath` and 
             :meth:`~.trackerfile.fromFileObject` are available.
@@ -43,8 +43,8 @@ class trackerfile(tuple):
         :param int filesize: Size in bytes of the file
         :param str description: Description of the file
         :param str md5: MD5 hash of the file
-        :returns: A new :class:`trackerfile` instance
-        :rtype: trackerfile
+        :returns: A new :class:`.trackerfile` instance
+        :rtype: :class:`.trackerfile`
         :raises ValueError: if the value of an argument isn't acceptable
         :raises TypeError: if the value of an argument is drastically wrong
         """
@@ -53,11 +53,11 @@ class trackerfile(tuple):
             raise ValueError("'md5' argument to trackerfile constructor must" \
                 " be a 32 character hex string.")
         
-        out = tuple(str(filename),
-                    int(filesize),
-                    str(description),
-                    str(md5),
-                    {})
+        out = ( str(filename),
+                int(filesize),
+                str(description),
+                str(md5),
+                {})
         return super(trackerfile, cls).__new__(cls, out)
     
     
@@ -79,11 +79,11 @@ class trackerfile(tuple):
     
     @classmethod
     def fromPath(cls, filepath):
-        """Create a new :class:`trackerfile` instance from a .track file.
+        """Create a new :class:`.trackerfile` instance from a .track file.
         
         :param str filepath: Path to the .track file.
-        :returns: A new :class:`trackerfile` instance
-        :rtype: trackerfile
+        :returns: A new :class:`.trackerfile` instance
+        :rtype: :class:`.trackerfile`
         :raises TypeError: if *filepath* is an incompatible type
         :raises OSError: if there is a problem reading from *filepath*
         :raises: All exceptions raisable by :meth:`~.trackerfile.fromFileObject`
@@ -95,15 +95,15 @@ class trackerfile(tuple):
     
     @classmethod
     def fromFileObject(cls, fileobj, ignorelines=""):
-        """Create a new :class:`trackerfile` instance from a .track file.
+        """Create a new :class:`.trackerfile` instance from a .track file.
         
         :param fileobj: Stream containing a .track file.
         :type fileobj: file-like object
         :param ignorelines: should contain characters that, if a line starts
             with them, will cause the line to be ignored.
         :type ignorelines: str or None
-        :returns: a new :class:`trackerfile` instance
-        :rtype: trackerfile
+        :returns: a new :class:`.trackerfile` instance
+        :rtype: :class:`.trackerfile`
         :raises MalformedTrackerFileException: if the file is malformed
         :raises RuntimeError: if something unexpected happens
         :raises ValueError: if *fileobj* is closed
@@ -232,7 +232,7 @@ class trackerfile(tuple):
         return (attr.lower(), value)
     
     
-    @staticmethod
+    @classmethod
     def parsePeer(cls, line):
         """Parses a peer line of a .track file.
         
@@ -257,7 +257,7 @@ class trackerfile(tuple):
         parts[0] = IPv4Address( parts[0].strip() )
         
         # integerize parts 1-4
-        for i in xrange(1,5):
+        for i in range(1,5):
             parts[i] = int( parts[i].strip() )
         
         parts[4] = datetime.datetime.utcfromtimestamp( parts[4] )
@@ -365,6 +365,24 @@ class trackerfile(tuple):
         #write peers
         for line in self._peerGenerator():
             fileobj.write( line + "\n" )
+    
+    def writeToSocket(self, sock):
+        """Writes the tracker file to *sock* in the .track file format.
+        
+        Does not close *sock*. 
+        
+        :param sock: The file to be written to
+        :type sock: :class:`~socket.socket`
+        """
+        
+        #write metadata
+        for line in self._metadataGenerator():
+            sock.sendall( bytes(line + "\n", *apiutils.encoding_defaults) )
+        
+        #write peers
+        for line in self._peerGenerator():
+            sock.sendall( bytes(line + "\n", *apiutils.encoding_defaults) )
+    
     
     
     
