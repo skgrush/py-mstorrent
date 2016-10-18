@@ -15,26 +15,7 @@ from ipaddress import IPv4Address,AddressValueError
 
 import trackerfile
 import apiutils
-
-
-def _dirmaker(val):
-    val = os.path.abspath(val)
-    
-    if os.path.isdir(val):
-        return True
-    
-    print("No such directory {!r}. I'll make it!".format(val))
-    parentdir = os.path.dirname(val)
-    
-    #if the parent directory does exist
-    if os.path.exists( parentdir ):
-        parent_mode = os.stat(parentdir).st_mode
-        os.mkdir(val, parent_mode)
-        
-        return os.path.exists(val)
-    
-    raise FileNotFoundError(2,"No such directory {!r}".format(parentdir),
-                                                                  parentdir)
+import sillycfg
 
 
 
@@ -122,7 +103,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         tfname = "{}.track".format( fname )
         
-        tfpath = os.path.join( self.server.trackers_dir, tfname )
+        tfpath = os.path.join( self.server.torrents_dir, tfname )
         
         #check if .track file already exists
         if os.path.exists( tfpath ):
@@ -302,19 +283,25 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     
     config_file = None
     MAX_MESSAGE_LENGTH = 4096
-    __torrents_dir = './torrents/'
-    __trackers_dir = './torrents/trackers/'
+    __torrents_dir = None
     
-    def __init__(self, server_address, RequestHandlerClass, 
+    def __init__(self, server_ip, RequestHandlerClass, 
                        bind_and_activate=True,
                        config_file='./serverThreadConfig.cfg'):
-        """TrackerServer initializer. Extends TCPServer constructor
+        """TrackerServer initializer.
+        
+        Unlike the TCPServer constructor, this takes a *server_ip* string
+        instead of a tuple address because we will read the port for the
+        address from the config file.
         """
         
-        self.config_file = config_file
+        self.config_file = sillycfg.ServerConfig.fromFile( config_file )
+        self.torrents_dir = self.config_file.sharedFolder
+        server_port = self.config_file.listenPort
         
+        server_address = (server_ip,server_port)
         
-        self.torrents_dir = './torrents/'
+        print("Server will bind to {}:{}".format(*server_address))
         
         super(TrackerServer, self).__init__(server_address, RequestHandlerClass,
                                             bind_and_activate)
@@ -326,18 +313,11 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     @torrents_dir.setter
     def torrents_dir(self,val):
         val = os.path.abspath(val)
-        trackers_dir = os.path.join(val, 'trackers')
         
-        if not ( _dirmaker(val) and _dirmaker(trackers_dir) ):
+        if not ( sillycfg.dirmaker(val) ):
             raise RuntimeError("Failed to make torrents directory")
         
         self.__torrents_dir = val
-        self.__trackers_dir = trackers_dir
-        
-    
-    @property
-    def trackers_dir(self):
-        return self.__trackers_dir
 
 
 #
@@ -345,17 +325,9 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 #
 if __name__ == '__main__':
     
-    PORT = 9999
-    while True:
-        try:
-            srv = TrackerServer( ("localhost", PORT), TrackerServerHandler )
-        except OSError as err:
-            if 'already in use' in str(err):
-                PORT += 1
-                continue
-        break
+    srv = TrackerServer( "localhost", TrackerServerHandler )
     
-    print("Listening on port {}".format(PORT))
+    print("Listening on port {}".format(srv.config_file.listenPort))
     
     try:
         srv.serve_forever()

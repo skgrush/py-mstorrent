@@ -2,20 +2,50 @@
 # -*- coding: utf-8 -*-
 """Parser for ".cfg" files as defined in project spec.
 
-Things expected by the spec:
-"You must make the time interval between successive tracker refresh by the peer
-    part of its configuration file."
-"Keep all necessary information (such as port number, IP address) in configuration file."
-"This shared directory [torrents] and port number are read from the configuration file"
-"clientThreadConfig.cfg: First 2 lines are port no and IP address of the tracker
-    server, and last line is the periodic updatetracker interval in seconds."
-"serverThreadConfig.cfg: First line is the port no to which the peer listens,
-    i.e. for incoming peer connection requests, and last line is the name of the shared folder."
+There are two ways to create configfile (subclass) instances:
+
+First is to use *subclass*.fromFile(), where *subclass* is :class:`ServerConfig`
+or :class:`ClientConfig`, as appropriate. This will handle all instantiation
+needs.
+
+Second is to create a new :class:`ServerConfig` or :class:`ClientConfig`
+instance, then call *inst*.readIn() and *inst*.parseContents().
+
+If these steps are not followed, operations may raise 
+:exception:`NotFullyInstantiated`.
+
+After an instance is created, call *inst*.validate() to make sure the contents
+are valid.
+
+
 """
 
 import os
 import os.path
 from ipaddress import IPv4Address,AddressValueError
+
+DEFAULT_MAX_READ = 1024
+IGNORE_COMMENT_LINES = True
+
+def dirmaker(val):
+    val = os.path.abspath(val)
+    
+    if os.path.isdir(val):
+        return True
+    
+    print("No such directory {!r}. I'll make it!".format(val))
+    parentdir = os.path.dirname(val)
+    
+    #if the parent directory does exist
+    if os.path.exists( parentdir ):
+        parent_mode = os.stat(parentdir).st_mode
+        os.mkdir(val, parent_mode)
+        
+        return os.path.exists(val)
+    
+    raise FileNotFoundError(2,"No such directory {!r}".format(parentdir),
+                                                                  parentdir)
+
 
 
 class NotFullyInstantiated(RuntimeError):
@@ -31,8 +61,6 @@ class InvalidCfg(RuntimeError):
 
 class cfgfile:
     
-    #default
-    cfgMaxread = 1024
     
     @property
     def cfgPath(self):
@@ -75,7 +103,7 @@ class cfgfile:
     
     def __init__(self, path, maxread=None):
         if maxread is None:
-            maxread = type(self).cfgMaxread
+            maxread = DEFAULT_MAX_READ
         
         self.__path = os.path.abspath(path)
         self.cfgMaxread = int(maxread)
@@ -127,6 +155,9 @@ class cfgfile:
             except AddressValueError:
                 pass
             
+            if IGNORE_COMMENT_LINES and line.startswith('#'):
+                continue
+            
             values.append( line )
         
         self.__values = tuple(values)
@@ -156,7 +187,7 @@ class cfgfile:
     
     
     @classmethod
-    def fromFile(cls, path, maxread=cfgfile.cfgMaxread):
+    def fromFile(cls, path, maxread=DEFAULT_MAX_READ):
         """Read from *path*, and fully instantiate the class instance.
         
         Calls :meth:`.readin` and :meth:`parseContents` so you don't have to!
@@ -193,6 +224,13 @@ class cfgfile:
 
 
 class ClientConfig(cfgfile):
+    """Client config file abstraction.
+    
+    Spec defines that *"First 2 lines are port no and IP address of the tracker
+    server, and last line is the periodic updatetracker interval in seconds"*.
+    
+    We additionally define the third line to be the peer folder.
+    """
     
     def _validate(self):
         
@@ -203,7 +241,9 @@ class ClientConfig(cfgfile):
             and
             IPv4Address in firsttwo
             and
-            isinstance( self[-1], str )
+            isinstance( self[2], str )
+            and
+            isinstance( self[-1], int )
         )
     
     
@@ -222,6 +262,13 @@ class ClientConfig(cfgfile):
         return self[1] if isinstance(self[0],int) else self[0]
     
     @property
+    def peerFolder(self):
+        if not self.validate():
+            raise InvalidCfg
+        
+        return self[2]
+    
+    @property
     def updateInterval(self):
         if not self.validate():
             raise InvalidCfg
@@ -231,6 +278,11 @@ class ClientConfig(cfgfile):
 
 
 class ServerConfig(cfgfile):
+    """Server config file abstraction.
+    
+    Spec defines that *"[f]irst line is the port no to which the peer listens...
+    and last line is the name of the shared folder"*.
+    """
     
     def _validate(self):
         
