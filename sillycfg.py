@@ -4,20 +4,19 @@
 
 There are two ways to create configfile (subclass) instances:
 
-First is to use *subclass*.fromFile(), where *subclass* is :class:`ServerConfig`
-or :class:`ClientConfig`, as appropriate. This will handle all instantiation
-needs.
-
-Second is to create a new :class:`ServerConfig` or :class:`ClientConfig`
-instance, then call *inst*.readIn() and *inst*.parseContents().
+    1. Use :meth:`.fromFile`. This will handle all instantiation needs.
+    2. Create a new :class:`ServerConfig` or :class:`ClientConfig`
+       instance, then call :meth:`.readIn` and :meth:`.parseContents`.
 
 If these steps are not followed, operations may raise 
-:exception:`NotFullyInstantiated`.
+:exc:`NotFullyInstantiated`.
 
-After an instance is created, call *inst*.validate() to make sure the contents
+After an instance is created, call :meth:`.validate` to make sure the contents
 are valid.
 
-
+Attributes:
+    DEFAULT_MAX_READ (int): the maximum number of bytes to read from file.
+    IGNORE_COMMENT_LINES (bool): Whether or not to ignore #comment lines.
 """
 
 import os
@@ -28,6 +27,20 @@ DEFAULT_MAX_READ = 1024
 IGNORE_COMMENT_LINES = True
 
 def dirmaker(val):
+    """Utility function for checking for the existence of a directory, and
+    creating it if it doesn't exist.
+    
+    Will **not** create the parent directory of *val* if it doesn't exist.
+    
+    Args:
+        val (str): Path to the desired directory. 
+    
+    Returns:
+        bool: True if the directory exists or was created; False if not.
+    
+    Raises:
+        FileNotFoundError: If the parent directory of *val* doesn't exist.
+    """
     val = os.path.abspath(val)
     
     if os.path.isdir(val):
@@ -50,7 +63,7 @@ def dirmaker(val):
 
 class NotFullyInstantiated(RuntimeError):
     """Raised when an operation couldn't be executed because the config hasn't
-    full instantiated been."""
+    been fully instantiated."""
     pass
 
 class InvalidCfg(RuntimeError):
@@ -60,6 +73,13 @@ class InvalidCfg(RuntimeError):
     pass
 
 class cfgfile:
+    """Base class for config file abstractions.
+    
+    Note:
+        Should use :class:`ServerConfig` or :class:`ClientConfig`, rather than
+        using this directly.
+        I suppose you can use it, but it doesn't validate data.
+    """
     
     
     @property
@@ -249,6 +269,10 @@ class ClientConfig(cfgfile):
     
     @property
     def serverPort(self):
+        """ClientConfig-specific attribute, port of the tracker server.
+        
+        Should be first or second line of config.
+        """
         if not self.validate():
             raise InvalidCfg
         
@@ -256,6 +280,10 @@ class ClientConfig(cfgfile):
     
     @property
     def serverIP(self):
+        """ClientConfig-specific attribute, IP of the tracker server
+        
+        Should be first or second line of config.
+        """
         if not self.validate():
             raise InvalidCfg
         
@@ -263,6 +291,11 @@ class ClientConfig(cfgfile):
     
     @property
     def peerFolder(self):
+        """ClientConfig-specific attribute, name of local peer storage.
+        
+        NOT DEFINED BY SPEC.
+        Should be third line of config.
+        """
         if not self.validate():
             raise InvalidCfg
         
@@ -270,6 +303,10 @@ class ClientConfig(cfgfile):
     
     @property
     def updateInterval(self):
+        """ClientConfig-specific attribute, client updatetracker interval.
+        
+        Should be the last line of config.
+        """
         if not self.validate():
             raise InvalidCfg
         
@@ -294,6 +331,10 @@ class ServerConfig(cfgfile):
     
     @property
     def listenPort(self):
+        """ServerConfig-specific attribute, which port to listen on.
+        
+        Should be the first line of config.
+        """
         if not self.validate():
             raise InvalidCfg
         
@@ -302,6 +343,10 @@ class ServerConfig(cfgfile):
     
     @property
     def sharedFolder(self):
+        """ServerConfig-specific attribute, local directory for .track files.
+        
+        Should be the last line of config.
+        """
         if not self.validate():
             raise InvalidCfg
         
