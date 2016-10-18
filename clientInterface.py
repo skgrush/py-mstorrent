@@ -6,11 +6,6 @@ import sys
 import threading
 import time
 
-
-def f(q):
-    time.sleep(10)
-    q.put(str(multiprocessing.current_process()))
-
 class clientInterface():
 
     def __init__(self, stdscr, commands, args):
@@ -123,10 +118,11 @@ class clientInterface():
         py, px = self.pad.getmaxyx()
         for line in msg.strip("\r\n").split("\n"):
             try:
+                newlines = 1 + int(len(line.expandtabs()) / px)
                 self.pad.addstr(self.linecount % (py - 1), 0, str(line))
-                self.linecount += 1 + int(len(line) / px)
+                self.linecount += newlines
 
-                if self.linecount == y + self.scrolly:
+                if self.linecount == y + self.scrolly + (newlines - 1):
                     self.scrolly += 1
 
                 self.draw_pad()
