@@ -14,12 +14,12 @@ import threading
 
 import trackerfile
 
-thost = '127.0.0.1'
-tport = 10000
 myip = None
 
 # Put these in a config
-STARTPORT = 666
+thost = '127.0.0.1'
+tport = 10000
+STARTPORT = 11000
 FILE_DIRECTORY = "torrents/"
 CHUNK_SIZE = 1024
 
@@ -85,6 +85,8 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         
         # Check if a tracker file exists for the file
         tracker = self.server.torrents_dir + "/" + fname + ".track"
+
+
         # Open the file
         path = self.server.torrents_dir + "/" + fname
         try:
@@ -170,7 +172,9 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 class peer():
     def __init__(self, message_queue):
         self.message_queue = message_queue
-        STARTPORT = 666
+        global STARTPORT
+        if STARTPORT < 1024:
+            peer.write("Warning: Port {} may be reserved. Please use port 1024 or higher".format(STARTPORT), message_queue)
 
         while True:
             try:
@@ -310,12 +314,8 @@ class interpreter(cmd.Cmd):
         peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size), self.message_queue)
 
     def do_REQ(self, line):
-        args = interpreter.str_to_args(line)
-        host, port = thost, tport
-        if len(args) == 1 and args[0]:
-            host = args[0]
-        elif len(args) == 2:
-            host, port = args
+        parse = cmds["REQ"].parse_args(interpreter.str_to_args(line))
+        host, port = parse.host or thost, parse.port or tport
         self.write("Requesting list of tracker files from tracker {}:{}".format(host, port))
         response = peer.send(peer, host, port, "<REQ LIST>", self.message_queue)
 
@@ -354,8 +354,8 @@ cmds["updatetracker"].add_argument("start_byte", type=int, help="Start byte")
 cmds["updatetracker"].add_argument("end_byte", type=int, help="End byte")
 cmds["updatetracker"].add_argument("-host", type=str, help="IP address of tracker server", nargs="?")
 cmds["updatetracker"].add_argument("-port", type=int, help="Port number of tracker server", nargs="?")
-cmds["REQ"].add_argument("host", type=str, help="Tracker ip", nargs="?")
-cmds["REQ"].add_argument("port", type=int, help="Tracker port", nargs="?")
+cmds["REQ"].add_argument("-host", type=str, help="Tracker ip", nargs="?")
+cmds["REQ"].add_argument("-port", type=int, help="Tracker port", nargs="?")
 cmds["gettracker"].add_argument("fname", type=str, help="Name of tracker file")
 cmds["gettracker"].add_argument("-host", type=str, help="IP address of tracker server", nargs="?")
 cmds["gettracker"].add_argument("-port", type=int, help="Port number of tracker server", nargs="?")
