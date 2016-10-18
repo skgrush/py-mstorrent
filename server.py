@@ -17,6 +17,27 @@ import trackerfile
 import apiutils
 
 
+def _dirmaker(val):
+    val = os.path.abspath(val)
+    
+    if os.path.isdir(val):
+        return True
+    
+    print("No such directory {!r}. I'll make it!".format(val))
+    parentdir = os.path.dirname(val)
+    
+    #if the parent directory does exist
+    if os.path.exists( parentdir ):
+        parent_mode = os.stat(parentdir).st_mode
+        os.mkdir(val, parent_mode)
+        
+        return os.path.exists(val)
+    
+    raise FileNotFoundError(2,"No such directory {!r}".format(parentdir),
+                                                                  parentdir)
+
+
+
 class TrackerServerHandler(socketserver.BaseRequestHandler):
     """The request handler for TrackerServer.
     """
@@ -101,7 +122,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         tfname = "{}.track".format( fname )
         
-        tfpath = os.path.join( self.server.torrents_dir, tfname )
+        tfpath = os.path.join( self.server.trackers_dir, tfname )
         
         #check if .track file already exists
         if os.path.exists( tfpath ):
@@ -282,6 +303,7 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     config_file = None
     MAX_MESSAGE_LENGTH = 4096
     __torrents_dir = './torrents/'
+    __trackers_dir = './torrents/trackers/'
     
     def __init__(self, server_address, RequestHandlerClass, 
                        bind_and_activate=True,
@@ -304,25 +326,18 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     @torrents_dir.setter
     def torrents_dir(self,val):
         val = os.path.abspath(val)
+        trackers_dir = os.path.join(val, 'trackers')
         
-        if not os.path.exists(val):
-            print("No such directory {!r}. Maybe I'll make it.".format(val))
-            parentdir = os.path.dirname(val)
-            
-            if os.path.exists( parentdir ):
-                parent_mode = os.stat(parentdir).st_mode
-                os.mkdir(val, parent_mode)
-                
-                self.__torrents_dir = val
-                return
+        if not ( _dirmaker(val) and _dirmaker(trackers_dir) ):
+            raise RuntimeError("Failed to make torrents directory")
         
-        else:
-            self.__torrents_dir = val
-            return
-            
-        raise FileNotFoundError(2,"No such directory {!r}".format(parentdir),
-                                                                      parentdir)
+        self.__torrents_dir = val
+        self.__trackers_dir = trackers_dir
         
+    
+    @property
+    def trackers_dir(self):
+        return self.__trackers_dir
 
 
 #
