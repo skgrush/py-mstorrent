@@ -15,7 +15,7 @@ import threading
 import trackerfile
 
 thost = '127.0.0.1'
-tport = 9999
+tport = 10000
 myip = None
 
 # Put these in a config
@@ -79,8 +79,12 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
                 return self.exception('BadRequest', err.args[0])
 
     def api_get(self, seg, fname, start_byte, chunk_size):
+        print("Received request for {}, starting from byte {} with chunk size {}".format(fname, start_byte, chunk_size))
         if int(chunk_size) > CHUNK_SIZE:
             return self.exception("ChunkSizeException", "{} > {}".format(chunk_size, CHUNK_SIZE))
+        
+        # Check if a tracker file exists for the file
+        tracker = self.server.torrents_dir + "/" + fname + ".track"
         # Open the file
         path = self.server.torrents_dir + "/" + fname
         try:
@@ -182,7 +186,6 @@ class peer():
 
         self.server = multiprocessing.Process(target = self.srv.serve_forever)
         #self.downloader = multiprocessing.Process(target = self.spawn_threads, args = (message_queue))
-
     # Begin processes for job-2 and job-3
     def begin(self):
         self.server.start()
@@ -222,7 +225,17 @@ class peer():
         s.connect((ip, int(port)))
         s.send(bytes((message), *apiutils.encoding_defaults))
         myip = s.getsockname()[0]
-        resp = s.recv(4096)
+        resp = b""
+        while True:
+            try:
+                data = s.recv(4096)
+            except Exception as err:
+                print(str(err))
+                break
+            if not data:
+                break
+            resp += data
+
         s.close()
 
         peer.write(apiutils.arg_decode(resp.decode(*apiutils.encoding_defaults)), queue)
@@ -283,13 +296,9 @@ class interpreter(cmd.Cmd):
             self.write("Unable to find file {} or file is empty".format(x.fname))
 
     def do_updatetracker(self, line):
-        args = interpreter.str_to_args(line)
-        x = cmds["updatetracker"].parse_args(interpreter.str_to_args(line))
-        if len(args) == 3:
-            response = peer.send(peer, thost, tport, "<updatetracker {} {} {}>".format(args[0], args[1], args[2], ), self.message_queue)
-            self.write(response)
-        else:
-            self.write("Usage: updatetracker filename start_bytes end_bytes")
+        parse = cmds["updatetracker"].parse_args(interpreter.str_to_args(line))
+        response = peer.send(peer, parse.host or thost, parse.port or tport, "<updatetracker {} {} {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.end_byte, myip, STARTPORT), self.message_queue)
+        self.write(response)
 
     def do_gettracker(self, line):
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
@@ -313,7 +322,7 @@ class interpreter(cmd.Cmd):
     # stdout and stderr
     def write(self, msg):
         self.message_queue.put(str(msg))
-        pass
+
     def flush(self):
         pass
 
@@ -340,6 +349,11 @@ cmds["createtracker"].add_argument("fname", type=str, help="Name of the file")
 cmds["createtracker"].add_argument("descrip", type=str, help="File description")
 cmds["createtracker"].add_argument("-host", type=str, help="Tracker ip")
 cmds["createtracker"].add_argument("-port", type=int, help="Tracker port")
+cmds["updatetracker"].add_argument("fname", type=str, help="Name of tracker file")
+cmds["updatetracker"].add_argument("start_byte", type=int, help="Start byte")
+cmds["updatetracker"].add_argument("end_byte", type=int, help="End byte")
+cmds["updatetracker"].add_argument("-host", type=str, help="IP address of tracker server", nargs="?")
+cmds["updatetracker"].add_argument("-port", type=int, help="Port number of tracker server", nargs="?")
 cmds["REQ"].add_argument("host", type=str, help="Tracker ip", nargs="?")
 cmds["REQ"].add_argument("port", type=int, help="Tracker port", nargs="?")
 cmds["gettracker"].add_argument("fname", type=str, help="Name of tracker file")
@@ -361,13 +375,16 @@ def main(stdscr):
     sys.stderr = commandline
     clientInterface.begin(cli)
 
-    my_peer = peer(cli.queue)
-
-    response = my_peer.send(thost, tport, "<HELLO>", cli.queue)
     try:
+        my_peer = peer(cli.queue)
+
+        response = my_peer.send(thost, tport, "<HELLO>", cli.queue)
         my_peer.begin()
     except Exception as err:
+        print("Critical failure in initialization")
         print(err)
+
+
     cli.inp.join()
 
     curses.curs_set(0)

@@ -99,7 +99,7 @@ class clientInterface():
                 try:
                     input_str += chr(k)
                 except Exception:
-                    queue.put(str(k))
+                    self.queue.put(k)
 
             # Bound scroll area
             self.scrollx = max(min(self.px - x, self.scrollx), 0)
@@ -138,7 +138,7 @@ class clientInterface():
         try:
             self.commands.onecmd(msg)
         except Exception as err:
-            self.write_msg(str(err))
+            self.queue.put(str(err))
 
         #p = multiprocessing.Process(target = f, args = (self.queue,))
         #self.processes.append(p)

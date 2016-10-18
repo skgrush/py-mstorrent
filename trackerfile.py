@@ -18,6 +18,7 @@ __docformat__ = 'reStructuredText'
 import re
 import datetime
 from ipaddress import IPv4Address
+import apiutils
 
 
 peer_update_interval = 15 * 60 #15 minutes by default
