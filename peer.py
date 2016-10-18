@@ -227,12 +227,15 @@ class peer():
 
         return (size, md5.hexdigest())
 
-    def send(self, ip, port, message, queue):
+    def send(self, ip, port, message, queue=None):
         global myip
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
-            peer.write("Unable to create socket", queue)
+            if queue:
+                queue.write("Unable to create socket", queue)
+            else:
+                print("unable to create socket")
             return
 
         s.connect((ip, int(port)))
@@ -250,8 +253,6 @@ class peer():
             resp += data
 
         s.close()
-
-        peer.write(apiutils.arg_decode(resp.decode(*apiutils.encoding_defaults)), queue)
         return resp.decode(*apiutils.encoding_defaults)
 
     def write(message, queue):
@@ -364,7 +365,7 @@ class downloader():
             filepath = os.path.join(FILE_DIRECTORY, fname)
             if not os.path.exists(filepath):
                 os.rename(cachepath, filepath)
-                
+
         else:
             print("File md5s do not match. {} {}".format(md5.hexdigest(), tracker[3]))
 
@@ -397,31 +398,39 @@ class downloader():
 
         return resp.decode(*apiutils.encoding_defaults)
 
-    def gettracker(self, file):
-        global myip
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except socket.error as msg:
-            peer.write("Unable to create socket", queue)
-            return
-
-        s.connect((thost, int(tport)))
-        s.send(bytes(("<GET {}>".format(file)), *apiutils.encoding_defaults))
+    def gettracker(file, host=thost, port=tport):
+        message = "<GET {}.track>".format(apiutils.arg_encode(file))
         
-        resp = b""
-        while True:
-            try:
-                data = s.recv(4096)
-            except Exception as err:
-                print(str(err))
-                break
-            if not data:
-                break
-            resp += data
+        response = peer.send(peer, host, port, message, None)
+        print(response)
 
-        s.close()
+        match = apiutils.re_apicommand.match(response)
 
-        response = resp.decode(*apiutils.encoding_defaults)
+        if match and match.group("command") == "REP":
+            payload = apiutils.re_apicommand.sub("", response)
+            with open(os.path.join(FILE_DIRECTORY, file + ".track"), "w") as tracker:
+                tracker.write(payload)
+        else:
+            print(apiutils.arg_decode(response))
+
+    def updatetracker(file, start_byte, end_byte, host=thost, port=tport):
+        fname = apiutils.arg_encode(file)
+        msg = "<updatetracker {} {} {} {} {}>".format(fname, start_byte, end_byte, myip, STARTPORT)
+        response = peer.send(peer, host, port, msg)
+
+        match = apiutils.re_apicommand.match(response)
+        if match and match.group("command") == "updatetracker":
+            if "succ" in (match.group("args")):
+                # it updated successfully
+                print("Tracker update successful")
+                pass
+            else:
+                print(match.group("args") + ":" + response)
+
+        else:
+            print(response)
+
+        return response
 
     def size_remaining(log, tracker):
         filesize = int(tracker[1])
@@ -456,7 +465,7 @@ class downloader():
             log.append((start, size))
             with open(logpath, "w") as l:
                 for st, en in log:
-                    l.write("st:en\n")
+                    l.write("{}:{}\n".format(st, en))
             return True
         for i in range(len(log)):
             s, e = log[i]
@@ -523,23 +532,24 @@ class interpreter(cmd.Cmd):
 
     def do_updatetracker(self, line):
         parse = cmds["updatetracker"].parse_args(interpreter.str_to_args(line))
-        response = peer.send(peer, parse.host or thost, parse.port or tport, "<updatetracker {} {} {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.end_byte, myip, STARTPORT), self.message_queue)
-        self.write(response)
+        downloader.updatetracker(parse.fname, parse.start_byte, parse.end_byte, parse.host or thost, parse.port or tport)
 
     def do_gettracker(self, line):
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
-        peer.send(peer, parse.host or thost, parse.port or tport, "<GET {}.track>".format(apiutils.arg_encode(parse.fname)), self.message_queue)
-
+        downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport)
+        #tracker = peer.send(peer, parse.host or thost, parse.port or tport, "<GET {}.track>".format(apiutils.arg_encode(parse.fname)), self.message_queue)
 
     def do_GET(self, line):
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
-        peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size), self.message_queue)
+        response = peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size), self.message_queue)
+        self.write(response)
 
     def do_REQ(self, line):
         parse = cmds["REQ"].parse_args(interpreter.str_to_args(line))
         host, port = parse.host or thost, parse.port or tport
         self.write("Requesting list of tracker files from tracker {}:{}".format(host, port))
         response = peer.send(peer, host, port, "<REQ LIST>", self.message_queue)
+        self.write(response)
 
     # stdout and stderr
     def write(self, msg):
@@ -606,8 +616,8 @@ def main(stdscr):
         print("Critical failure in initialization")
         print(err)
 
-
     cli.inp.join()
+
 
     curses.curs_set(0)
 

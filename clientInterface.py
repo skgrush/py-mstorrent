@@ -118,10 +118,11 @@ class clientInterface():
         py, px = self.pad.getmaxyx()
         for line in msg.strip("\r\n").split("\n"):
             try:
+                newlines = 1 + int(len(line.expandtabs()) / px)
                 self.pad.addstr(self.linecount % (py - 1), 0, str(line))
-                self.linecount += 1 + int(len(line.expandtabs()) / px)
+                self.linecount += newlines
 
-                if self.linecount == y + self.scrolly:
+                if self.linecount == y + self.scrolly + (newlines - 1):
                     self.scrolly += 1
 
                 self.draw_pad()
