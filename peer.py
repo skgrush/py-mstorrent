@@ -32,16 +32,17 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         """
         
         #get (MAX_MESSAGE_LENGTH + 1) bytes
-        data = str(self.request.recv(self.server.MAX_MESSAGE_LENGTH+1),
-                                                    *apiutils.encoding_defaults)
-        
-        
-        #check if data is <= MAX_MESSAGE_LENGTH
-        if len(data) > self.server.MAX_MESSAGE_LENGTH:
-            print("Request too long")
-            # this is out-of-spec, but necessary
-            return self.exception( 'RequestTooLong', "Maximum message length " \
-                                "is {}".format(self.server.MAX_MESSAGE_LENGTH) )
+        data = ""
+        while True:
+            try:
+                d = sef.request.recv(4096)
+            except Exception as err:
+                print(str(err))
+                break
+            if not d:
+                break
+            data += d
+        data = str(data, *apiutils.encoding_defaults)
         
         #Retrieve command and args from message
         match = apiutils.re_apicommand.match( data )
@@ -514,7 +515,7 @@ class interpreter(cmd.Cmd):
                 c = cmds[x.command]
                 self.write(c.format_help().replace("peer.py", x.command))
             else:
-                self.write("Unknown command {}".format(x.command))
+                self.write("Unknown command '{}'".format(x.command))
             
 
 
