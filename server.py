@@ -107,6 +107,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         #check if .track file already exists
         if os.path.exists( tfpath ):
+            print("Couldn't create tracker, already exists.")
             self.request.sendall( b"<createtracker ferr>" )
             return
         
@@ -121,6 +122,8 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<createtracker fail>" )
             return
         
+        print("Created new trackerfile instance for fname={!r}".format(fname))
+        
         #add creator as peer
         try:
             tf.updatePeer( ip, port, 0, fsize-1 )
@@ -129,9 +132,13 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<createtracker fail>" )
             return
         
+        print("Added {} (creator) to trackerfile".format( ip ))
+        
         #write tracker to file
         with open(tfpath, 'w') as fl:
             tf.writeTo( fl )
+        
+        print("Wrote trackerfile to disk.")
         
         self.request.sendall( b"<createtracker succ>" )
         return
@@ -182,6 +189,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         except Exception as err:
             print(err)
             self.request.sendall( b"<updatetracker fail>" )
+            return
         
         #add peer peer
         try:
@@ -191,9 +199,13 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<updatetracker fail>" )
             return
         
+        print("Added {} (creator) to trackerfile".format( ip ))
+        
         #write tracker to file
         with open(tfpath, 'w') as fl:
             tf.writeTo( fl )
+        
+        print("Wrote trackerfile to disk.")
         
         self.request.sendall( b"<updatetracker succ>" )
         return
@@ -232,6 +244,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         self.request.sendall( b"<REP LIST END>\n" )
         
+        print("Successfully send REP response.")
         return
     
     
@@ -259,9 +272,12 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         tf.writeToSocket( self.request ) 
         self.request.sendall( bytes( "<REP GET END {}>\n".format(tf.md5),
                                                    *apiutils.encoding_defaults))
+        
+        print("Sent REP response for {!r}".format(track_fname))
     
     def api_hello(self, *_):
         self.request.sendall( b"<HELLO>\n" )
+        print("Sent HELLO response")
     
     def exception(self, exceptionType, exceptionInfo=''):
         
@@ -279,6 +295,18 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
 
 class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """The socket server for handling incoming requests.
+    
+    Unlike the TCPServer constructor, this takes a *server_ip* string
+    instead of a tuple address because we will read the port for the
+    address from the config file.
+    
+    Arguments:
+        server_ip (str): The IP to bind to and listen to.
+        RequestHandlerClass (:class:`~socketserver.BaseRequestHandler`): 
+            Should be :class:`~.TrackerServerHandler`.
+        bind_and_activate (bool, optional): automatically invokes server
+            binding and activation procedures.
+        config_file (str, optional): Path to server configuration file.
     """
     
     config_file = None
@@ -288,12 +316,7 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __init__(self, server_ip, RequestHandlerClass, 
                        bind_and_activate=True,
                        config_file='./serverThreadConfig.cfg'):
-        """TrackerServer initializer.
-        
-        Unlike the TCPServer constructor, this takes a *server_ip* string
-        instead of a tuple address because we will read the port for the
-        address from the config file.
-        """
+        """TrackerServer initializer."""
         
         self.config_file = sillycfg.ServerConfig.fromFile( config_file )
         self.torrents_dir = self.config_file.sharedFolder
@@ -332,5 +355,10 @@ if __name__ == '__main__':
     try:
         srv.serve_forever()
     
+    except KeyboardInterrupt:
+        print("\n"+"="*40)
+        print("Bye, have a wonderful time! (Tracker server shutting down)")
+        
     finally:
         srv.shutdown()
+        print("Tracker server has shut down")

@@ -212,7 +212,7 @@ class trackerfile(tuple):
         
         Returns:
             tuple or None: a 2-tuple (for a metadata line), a 5-tuple
-                (for a peer line), or None (for a pass line).
+            (for a peer line), or None (for a pass line).
         
         Raises:
             AttributeError: if *line* isn't a string
