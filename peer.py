@@ -152,7 +152,7 @@ class peer():
 
         while True:
             try:
-                self.srv = PeerServer(("localhost", STARTPORT), PeerServerHandler)
+                self.srv = PeerServer((myip, STARTPORT), PeerServerHandler)
                 print("Listening on port {}".format(STARTPORT))
             except Exception as err:
                 if 'already in use' in str(err):
