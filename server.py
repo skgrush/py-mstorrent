@@ -313,6 +313,8 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         config_file (str, optional): Path to server configuration file.
     """
     
+    allow_reuse_address = True
+    
     config_file = None
     MAX_MESSAGE_LENGTH = 4096
     __torrents_dir = None
