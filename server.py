@@ -7,6 +7,7 @@ import socket
 import socketserver
 import threading
 
+import sys
 import os
 import os.path
 
@@ -348,7 +349,15 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 #
 if __name__ == '__main__':
     
-    srv = TrackerServer( "localhost", TrackerServerHandler )
+    srv_ip = "localhost"
+    
+    if len(sys.argv) > 1:
+        try:
+            srv_ip = str( IPv4Address(sys.argv[1]) )
+        except AddressValueError:
+            pass
+    
+    srv = TrackerServer( srv_ip, TrackerServerHandler )
     
     print("Listening on port {}".format(srv.config_file.listenPort))
     
