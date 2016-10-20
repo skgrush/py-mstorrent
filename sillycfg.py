@@ -165,6 +165,9 @@ class cfgfile:
         for line in self.cfgLines:
             line = line.strip()
             
+            if not line:
+                continue
+            
             if line.isdigit():
                 values.append( int(line) )
                 continue
