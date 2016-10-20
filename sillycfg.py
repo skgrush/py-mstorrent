@@ -143,18 +143,18 @@ class cfgfile:
     
     
     def readIn(self):
-        """Read the contents of the config file into cfgContents.
+        """Read the contents of the config file into :attr:`cfgContents`.
         
-        Sets cfgContents attribute.
+        Sets :attr:`cfgContents` attribute.
         """
         with open(self.cfgPath, 'r', encoding='utf-8') as fl:
             self.__contents = fl.read( self.cfgMaxread )
     
     
     def parseContents(self):
-        """Parse cfgContents into cfgValues.
+        """Parse :attr:`cfgContents` into :attr:`cfgValues`.
         
-        Sets cfgLines and cfgValues attributes.
+        Sets :attr:`cfgLines` and :attr:`cfgValues` attributes.
         
         Raises:
             NotFullyInstantiated: if :meth:`.readIn` hasn't been called.
@@ -224,7 +224,7 @@ class cfgfile:
     
     
     def __getitem__(self, i):
-        """Getter for cfgValues.
+        """Getter for :attr:`cfgValues`.
         
         Raises:
             NotFullyInstantiated: if :meth:`parseContents` hasn't been called.
@@ -236,7 +236,7 @@ class cfgfile:
     
     
     def __len__(self):
-        """The length of cfgValues.
+        """The length of :attr:`cfgValues`.
         
         Always returns, even if not fully instantiated.
         """
