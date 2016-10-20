@@ -304,24 +304,22 @@ class downloader():
 
     def download(self, tracker):
         fname = tracker[0]
+        log = []
+        
         # Check if a log and/or cache exists for this file
-
         logpath = os.path.join(FILE_DIRECTORY, fname + ".log")
         if not os.path.isfile(logpath):
-            logfile = open(logpath, "w")
-        else:
-            logfile = open(logpath, "r+")
+            with open(logpath, "w") as logfile:
+                logfile.write("0:0")
+        with open(logpath, "r+") as logfile:
+            try:
+                for line in logfile.readlines():
+                    if line != "":
+                        start, end = line.split(":")
+                        log.append((int(start), int(end)))
+            except Exception as err:
+                print("Malformed Log File {}. ".format(tracker[0]) + str(err))
 
-        log = []
-
-        try:
-            for line in logfile.readlines():
-                start, end = line.split(":")
-                log.append((int(start), int(end)))
-        except Exception as err:
-            print("Malformed Log File {}. ".format(tracker[0]) + str(err))
-
-        logfile.close()
 
         cachepath = os.path.join(FILE_DIRECTORY, fname + ".cache")
         if not os.path.isfile(cachepath):
@@ -660,7 +658,7 @@ def main(stdscr):
 
     # Shut down
     my_peer.download.queue.put("EXIT")
-    #my_peer.srv.shutdown()
+    my_peer.srv.shutdown()
 
 if __name__ == "__main__":
     curses.wrapper(main)
