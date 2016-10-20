@@ -152,7 +152,7 @@ class peer():
 
         while True:
             try:
-                self.srv = PeerServer(("localhost", STARTPORT), PeerServerHandler)
+                self.srv = PeerServer((myip, STARTPORT), PeerServerHandler)
                 print("Listening on port {}".format(STARTPORT))
             except Exception as err:
                 if 'already in use' in str(err):
@@ -194,7 +194,11 @@ class peer():
             return(0, 0)
 
         # Generate a log file indicating entire file is available
-        # (TODO)
+        try:
+            with open(os.path.join(FILE_DIRECTORY, filename + ".log"), "w") as logfile:
+                logfile.write("0:{}".format(size))
+        except Exception as err:
+            print(str(err))
 
         return (size, md5.hexdigest())
 
@@ -326,7 +330,8 @@ class downloader():
                     print("Downloaded bytes {} to {} of {}".format(start, start + size, fname))
                 else:
                     print("Error - incorrect size!")
-                time.sleep(0.1)
+                    time.sleep(0.5)
+                time.sleep(0.01)
             else:
                 print("Error. {}".format(apiutils.arg_decode(chunk)))
                 time.sleep(0.5)
