@@ -607,7 +607,7 @@ def main(stdscr):
 
     # Read the config
     config = sillycfg.ClientConfig.fromFile( "./clientThreadConfig.cfg" )
-    if config:
+    if config.validate():
         server_port = config.serverPort
         server_ip = str(config.serverIP)
         
@@ -616,7 +616,7 @@ def main(stdscr):
         
         thost, tport = server_ip, server_port
     else:
-        print("Could not find config file '{}'!".format("./clientThreadedConfig.cfg"))
+        print("Problem validating config file '{}'!".format("./clientThreadedConfig.cfg"))
         time.sleep(5)
         return
 
