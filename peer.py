@@ -7,6 +7,7 @@ import base64
 import cmd
 import hashlib
 import os
+import sillycfg
 
 import socket
 import socketserver
@@ -19,7 +20,6 @@ myip = None
 thost = '127.0.0.1'
 tport = 9999
 STARTPORT = 11000
-FILE_DIRECTORY = "torrents/"
 CHUNK_SIZE = 1024
 
 # Basically a copypaste of server.py
@@ -35,7 +35,7 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         data = ""
         while True:
             try:
-                d = sef.request.recv(4096)
+                d = self.request.recv(4096)
             except Exception as err:
                 print(str(err))
                 break
@@ -127,22 +127,17 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """The socket server for handling incoming requests.
     """
     
-    config_file = None
-    MAX_MESSAGE_LENGTH = 4096
-    __torrents_dir = './torrents/'
+    __torrents_dir = None
     
-    def __init__(self, server_address, RequestHandlerClass, 
+    def __init__(self, address, RequestHandlerClass, 
                        bind_and_activate=True,
-                       config_file='./peerThreadConfig.cfg'):
+                       torrents_dir='./peerfolder'):
         """PeerServer initializer. Extends TCPServer constructor
         """
+        self.torrents_dir = torrents_dir
         
-        self.config_file = config_file
         
-        
-        self.torrents_dir = './torrents/'
-        
-        super(PeerServer, self).__init__(server_address, RequestHandlerClass,
+        super(PeerServer, self).__init__(address, RequestHandlerClass,
                                             bind_and_activate)
     
     @property
@@ -153,28 +148,16 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def torrents_dir(self,val):
         val = os.path.abspath(val)
         
-        if not os.path.exists(val):
-            print("No such directory {!r}. Maybe I'll make it.".format(val))
-            parentdir = os.path.dirname(val)
-            
-            if os.path.exists( parentdir ):
-                parent_mode = os.stat(parentdir).st_mode
-                os.mkdir(val, parent_mode)
-                
-                self.__torrents_dir = val
-                return
+        if not ( sillycfg.dirmaker(val) ):
+            raise RuntimeError("Failed to make torrents directory")
         
-        else:
-            self.__torrents_dir = val
-            return
-            
-        raise FileNotFoundError(2,"No such directory {!r}".format(parentdir),
-                                                                    parentdir)
+        self.__torrents_dir = val
             
         
     
 class peer():
-    def __init__(self, message_queue):
+    def __init__(self, config, message_queue):
+        self.config = config
         self.message_queue = message_queue
         global STARTPORT
         if STARTPORT < 1024:
@@ -182,7 +165,7 @@ class peer():
 
         while True:
             try:
-                self.srv = PeerServer( ("localhost", STARTPORT), PeerServerHandler)
+                self.srv = PeerServer(("localhost", STARTPORT), PeerServerHandler)
                 print("Listening on port {}".format(STARTPORT))
             except Exception as err:
                 if 'already in use' in str(err):
@@ -195,7 +178,7 @@ class peer():
 
         self.server = multiprocessing.Process(target = self.srv.serve_forever)
 
-        self.parent_conn, self.child_conn = multiprocessing.Pipe()
+        self.child_conn = multiprocessing.Queue()
         self.download = downloader(self.child_conn)
         self.downloader = multiprocessing.Process(target = self.download.spawn)
 
@@ -234,7 +217,7 @@ class peer():
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
             if queue:
-                queue.write("Unable to create socket", queue)
+                peer.write("Unable to create socket", queue)
             else:
                 print("unable to create socket")
             return
@@ -263,8 +246,8 @@ class downloader():
 
     workers = []
 
-    def __init__(self, pipe):
-        self.pipe = pipe
+    def __init__(self, queue):
+        self.queue = queue
 
     # Spawns new download threads for each tracker file
     def spawn(self):
@@ -278,19 +261,45 @@ class downloader():
         # Spawn a thread for each tracker file
         for file in trackerfiles:
             if file[-6:].lower() == ".track" and not os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
-                try:
-                    tracker = trackerfile.trackerfile.fromPath(FILE_DIRECTORY + file)
-                    worker = threading.Thread(name=file, target=self.download, args=(tracker, ) )
-                    self.workers.append(worker)
-                    worker.start()
+                self.spawn_thread(file)
 
-                except Exception as err:
-                    self.message_queue.put(err)
+        while True:
+            try:
+                msg = self.queue.get().split(" ")
+                if msg[0] == "EXIT":
+                    break
+                elif msg[0] == "NEW":
+                    file = msg[1]
+                    print(file)
+                    if file[-6:].lower() == ".track":
+                        if os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
+                            print("File '{}' already exists, no need to make new download thread".format(file[:-6]))
+                        else:
+                            print("Spawning thread for {}".format(file[:-6]))
+                            self.spawn_thread(file)
+                else:
+                    # TODO: Add ability to cancel a download
+                    pass
+            except Exception:
+                break
 
         for worker in self.workers:
-            worker.join()
+            # TODO: Send the exit signal
+            pass
 
-        print("All downloads finished! Ending download process.")
+        #for worker in self.workers:
+        #    worker.join()
+
+        print("Download process ended.")
+
+    def spawn_thread(self, file):
+        try:
+            tracker = trackerfile.trackerfile.fromPath(FILE_DIRECTORY + file)
+            worker = threading.Thread(name=file, target=self.download, args=(tracker, ) )
+            self.workers.append(worker)
+            worker.start()
+        except Exception as err:
+            self.message_queue.put(err)
 
 
     def download(self, tracker):
@@ -411,6 +420,8 @@ class downloader():
             payload = apiutils.re_apicommand.sub("", response)
             with open(os.path.join(FILE_DIRECTORY, file + ".track"), "w") as tracker:
                 tracker.write(payload)
+                return True
+
         else:
             print(apiutils.arg_decode(response))
 
@@ -485,6 +496,7 @@ class downloader():
 class interpreter(cmd.Cmd):
     def __init__(self):
         self.stdout = self
+        self.download_queue = None
         pass
 
     def str_to_args(string):
@@ -537,8 +549,9 @@ class interpreter(cmd.Cmd):
 
     def do_gettracker(self, line):
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
-        downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport)
-        #tracker = peer.send(peer, parse.host or thost, parse.port or tport, "<GET {}.track>".format(apiutils.arg_encode(parse.fname)), self.message_queue)
+        if downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
+            # Tell the downloader thread that there is a new tracker file
+            self.download_queue.put("NEW {}.track".format(parse.fname))
 
     def do_GET(self, line):
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
@@ -600,6 +613,24 @@ cmds["GET"].add_argument("port", type=int, help="Peer port")
 
 
 def main(stdscr):
+    global thost, tport, FILE_DIRECTORY
+
+    # Read the config
+    config = sillycfg.ClientConfig.fromFile( "./clientThreadConfig.cfg" )
+    if config:
+        server_port = config.serverPort
+        server_ip = str(config.serverIP)
+        
+        server_address = (server_ip, server_port)
+        FILE_DIRECTORY = config.peerFolder
+        
+        thost, tport = server_ip, server_port
+    else:
+        print("Could not find config file '{}'!".format("./clientThreadedConfig.cfg"))
+        time.sleep(5)
+        return
+
+    # Set up the client interface and point stdout to the message queue
     commandline = interpreter()
 
     cli = clientInterface(stdscr, commandline, cmds)
@@ -608,21 +639,28 @@ def main(stdscr):
     sys.stderr = commandline
     clientInterface.begin(cli)
 
-    try:
-        my_peer = peer(cli.queue)
 
-        response = my_peer.send(thost, tport, "<HELLO>", cli.queue)
+    # Initialize the server and downloader processes
+    try:
+        response = peer.send(peer, *server_address, "<HELLO>", cli.queue)
+
+        my_peer = peer(config, cli.queue)
+
+        commandline.download_queue = my_peer.download.queue
+
         my_peer.begin()
     except Exception as err:
         print("Critical failure in initialization")
         print(err)
 
+    #print(my_peer.srv.config)
+
     cli.inp.join()
-
-
     curses.curs_set(0)
 
-    my_peer.srv.shutdown()
+    # Shut down
+    my_peer.download.queue.put("EXIT")
+    #my_peer.srv.shutdown()
 
 if __name__ == "__main__":
     curses.wrapper(main)

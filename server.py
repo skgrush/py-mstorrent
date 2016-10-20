@@ -15,6 +15,8 @@ from ipaddress import IPv4Address,AddressValueError
 
 import trackerfile
 import apiutils
+import sillycfg
+
 
 
 class TrackerServerHandler(socketserver.BaseRequestHandler):
@@ -105,6 +107,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         #check if .track file already exists
         if os.path.exists( tfpath ):
+            print("Couldn't create tracker, already exists.")
             self.request.sendall( b"<createtracker ferr>" )
             return
         
@@ -119,6 +122,8 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<createtracker fail>" )
             return
         
+        print("Created new trackerfile instance for fname={!r}".format(fname))
+        
         #add creator as peer
         try:
             tf.updatePeer( ip, port, 0, fsize-1 )
@@ -127,9 +132,13 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<createtracker fail>" )
             return
         
+        print("Added {} (creator) to trackerfile".format( ip ))
+        
         #write tracker to file
         with open(tfpath, 'w') as fl:
             tf.writeTo( fl )
+        
+        print("Wrote trackerfile to disk.")
         
         self.request.sendall( b"<createtracker succ>" )
         return
@@ -180,6 +189,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         except Exception as err:
             print(err)
             self.request.sendall( b"<updatetracker fail>" )
+            return
         
         #add peer peer
         try:
@@ -189,9 +199,13 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<updatetracker fail>" )
             return
         
+        print("Added {} (creator) to trackerfile".format( ip ))
+        
         #write tracker to file
         with open(tfpath, 'w') as fl:
             tf.writeTo( fl )
+        
+        print("Wrote trackerfile to disk.")
         
         self.request.sendall( b"<updatetracker succ>" )
         return
@@ -230,6 +244,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         self.request.sendall( b"<REP LIST END>\n" )
         
+        print("Successfully send REP response.")
         return
     
     
@@ -257,9 +272,12 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         tf.writeToSocket( self.request ) 
         self.request.sendall( bytes( "<REP GET END {}>\n".format(tf.md5),
                                                    *apiutils.encoding_defaults))
+        
+        print("Sent REP response for {!r}".format(track_fname))
     
     def api_hello(self, *_):
         self.request.sendall( b"<HELLO>\n" )
+        print("Sent HELLO response")
     
     def exception(self, exceptionType, exceptionInfo=''):
         
@@ -277,22 +295,36 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
 
 class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """The socket server for handling incoming requests.
+    
+    Unlike the TCPServer constructor, this takes a *server_ip* string
+    instead of a tuple address because we will read the port for the
+    address from the config file.
+    
+    Arguments:
+        server_ip (str): The IP to bind to and listen to.
+        RequestHandlerClass (:class:`~socketserver.BaseRequestHandler`): 
+            Should be :class:`~.TrackerServerHandler`.
+        bind_and_activate (bool, optional): automatically invokes server
+            binding and activation procedures.
+        config_file (str, optional): Path to server configuration file.
     """
     
     config_file = None
     MAX_MESSAGE_LENGTH = 4096
-    __torrents_dir = './torrents/'
+    __torrents_dir = None
     
-    def __init__(self, server_address, RequestHandlerClass, 
+    def __init__(self, server_ip, RequestHandlerClass, 
                        bind_and_activate=True,
                        config_file='./serverThreadConfig.cfg'):
-        """TrackerServer initializer. Extends TCPServer constructor
-        """
+        """TrackerServer initializer."""
         
-        self.config_file = config_file
+        self.config_file = sillycfg.ServerConfig.fromFile( config_file )
+        self.torrents_dir = self.config_file.sharedFolder
+        server_port = self.config_file.listenPort
         
+        server_address = (server_ip,server_port)
         
-        self.torrents_dir = './torrents/'
+        print("Server will bind to {}:{}".format(*server_address))
         
         super(TrackerServer, self).__init__(server_address, RequestHandlerClass,
                                             bind_and_activate)
@@ -305,24 +337,10 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def torrents_dir(self,val):
         val = os.path.abspath(val)
         
-        if not os.path.exists(val):
-            print("No such directory {!r}. Maybe I'll make it.".format(val))
-            parentdir = os.path.dirname(val)
-            
-            if os.path.exists( parentdir ):
-                parent_mode = os.stat(parentdir).st_mode
-                os.mkdir(val, parent_mode)
-                
-                self.__torrents_dir = val
-                return
+        if not ( sillycfg.dirmaker(val) ):
+            raise RuntimeError("Failed to make torrents directory")
         
-        else:
-            self.__torrents_dir = val
-            return
-            
-        raise FileNotFoundError(2,"No such directory {!r}".format(parentdir),
-                                                                      parentdir)
-        
+        self.__torrents_dir = val
 
 
 #
@@ -330,20 +348,17 @@ class TrackerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 #
 if __name__ == '__main__':
     
-    PORT = 9999
-    while True:
-        try:
-            srv = TrackerServer( ("localhost", PORT), TrackerServerHandler )
-        except OSError as err:
-            if 'already in use' in str(err):
-                PORT += 1
-                continue
-        break
+    srv = TrackerServer( "localhost", TrackerServerHandler )
     
-    print("Listening on port {}".format(PORT))
+    print("Listening on port {}".format(srv.config_file.listenPort))
     
     try:
         srv.serve_forever()
     
+    except KeyboardInterrupt:
+        print("\n"+"="*40)
+        print("Bye, have a wonderful time! (Tracker server shutting down)")
+        
     finally:
         srv.shutdown()
+        print("Tracker server has shut down")
