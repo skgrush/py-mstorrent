@@ -260,7 +260,7 @@ class downloader():
                 if msg[0] == "EXIT":
                     break
                 elif msg[0] == "NEW":
-                    file = msg[1]
+                    file = " ".join(msg[1:])
                     print(file)
                     if file[-6:].lower() == ".track":
                         if os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
