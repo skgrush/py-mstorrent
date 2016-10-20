@@ -32,17 +32,7 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         """
         
         #get (MAX_MESSAGE_LENGTH + 1) bytes
-        data = ""
-        while True:
-            try:
-                d = self.request.recv(4096)
-            except Exception as err:
-                print(str(err))
-                break
-            if not d:
-                break
-            data += d
-        data = str(data, *apiutils.encoding_defaults)
+        data = str(self.request.recv(4096), *apiutils.encoding_defaults)
         
         #Retrieve command and args from message
         match = apiutils.re_apicommand.match( data )
@@ -84,7 +74,6 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         if not os.path.isfile(tracker):
             return self.exception("NotHostingFile", "Peer does not have a logfile for '{}'.".format(fname))
 
-
         # Open the file
         path = os.path.join(self.server.torrents_dir, fname)
         try:
@@ -102,8 +91,6 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
 
             # Return an Exception
             return self.exception("FileException", "Could not find file for torrent '{}'".format(fname))
-
-        
 
         self.request.sendall( bytes(response, *apiutils.encoding_defaults) )
         print("Transmitted bytes {}-{} of file {}".format(start_byte, int(start_byte) + len(payload), fname))
