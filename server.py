@@ -40,6 +40,8 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             return self.exception( 'RequestTooLong', "Maximum message length " \
                                 "is {}".format(self.server.MAX_MESSAGE_LENGTH) )
         
+        print("\nReceived {}".format(data))
+        
         #Retrieve command and args from message
         match = apiutils.re_apicommand.match( data )
         if not match:
