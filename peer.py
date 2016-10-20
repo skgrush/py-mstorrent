@@ -35,7 +35,7 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         data = ""
         while True:
             try:
-                d = sef.request.recv(4096)
+                d = self.request.recv(4096)
             except Exception as err:
                 print(str(err))
                 break
