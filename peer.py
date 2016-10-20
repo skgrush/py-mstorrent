@@ -178,7 +178,7 @@ class peer():
 
         self.server = multiprocessing.Process(target = self.srv.serve_forever)
 
-        self.parent_conn, self.child_conn = multiprocessing.Pipe()
+        self.child_conn = multiprocessing.Queue()
         self.download = downloader(self.child_conn)
         self.downloader = multiprocessing.Process(target = self.download.spawn)
 
@@ -246,8 +246,8 @@ class downloader():
 
     workers = []
 
-    def __init__(self, pipe):
-        self.pipe = pipe
+    def __init__(self, queue):
+        self.queue = queue
 
     # Spawns new download threads for each tracker file
     def spawn(self):
@@ -261,19 +261,45 @@ class downloader():
         # Spawn a thread for each tracker file
         for file in trackerfiles:
             if file[-6:].lower() == ".track" and not os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
-                try:
-                    tracker = trackerfile.trackerfile.fromPath(FILE_DIRECTORY + file)
-                    worker = threading.Thread(name=file, target=self.download, args=(tracker, ) )
-                    self.workers.append(worker)
-                    worker.start()
+                self.spawn_thread(file)
 
-                except Exception as err:
-                    self.message_queue.put(err)
+        while True:
+            try:
+                msg = self.queue.get().split(" ")
+                if msg[0] == "EXIT":
+                    break
+                elif msg[0] == "NEW":
+                    file = msg[1]
+                    print(file)
+                    if file[-6:].lower() == ".track":
+                        if os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
+                            print("File '{}' already exists, no need to make new download thread".format(file[:-6]))
+                        else:
+                            print("Spawning thread for {}".format(file[:-6]))
+                            self.spawn_thread(file)
+                else:
+                    # TODO: Add ability to cancel a download
+                    pass
+            except Exception:
+                break
 
         for worker in self.workers:
-            worker.join()
+            # TODO: Send the exit signal
+            pass
 
-        print("All downloads finished! Ending download process.")
+        #for worker in self.workers:
+        #    worker.join()
+
+        print("Download process ended.")
+
+    def spawn_thread(self, file):
+        try:
+            tracker = trackerfile.trackerfile.fromPath(FILE_DIRECTORY + file)
+            worker = threading.Thread(name=file, target=self.download, args=(tracker, ) )
+            self.workers.append(worker)
+            worker.start()
+        except Exception as err:
+            self.message_queue.put(err)
 
 
     def download(self, tracker):
@@ -394,6 +420,8 @@ class downloader():
             payload = apiutils.re_apicommand.sub("", response)
             with open(os.path.join(FILE_DIRECTORY, file + ".track"), "w") as tracker:
                 tracker.write(payload)
+                return True
+
         else:
             print(apiutils.arg_decode(response))
 
@@ -468,6 +496,7 @@ class downloader():
 class interpreter(cmd.Cmd):
     def __init__(self):
         self.stdout = self
+        self.download_queue = None
         pass
 
     def str_to_args(string):
@@ -520,8 +549,9 @@ class interpreter(cmd.Cmd):
 
     def do_gettracker(self, line):
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
-        downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport)
-        #tracker = peer.send(peer, parse.host or thost, parse.port or tport, "<GET {}.track>".format(apiutils.arg_encode(parse.fname)), self.message_queue)
+        if downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
+            # Tell the downloader thread that there is a new tracker file
+            self.download_queue.put("NEW {}.track".format(parse.fname))
 
     def do_GET(self, line):
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
@@ -616,6 +646,8 @@ def main(stdscr):
 
         my_peer = peer(config, cli.queue)
 
+        commandline.download_queue = my_peer.download.queue
+
         my_peer.begin()
     except Exception as err:
         print("Critical failure in initialization")
@@ -624,11 +656,11 @@ def main(stdscr):
     #print(my_peer.srv.config)
 
     cli.inp.join()
-
-
     curses.curs_set(0)
 
-    my_peer.srv.shutdown()
+    # Shut down
+    my_peer.download.queue.put("EXIT")
+    #my_peer.srv.shutdown()
 
 if __name__ == "__main__":
     curses.wrapper(main)
