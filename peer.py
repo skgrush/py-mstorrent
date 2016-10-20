@@ -217,7 +217,7 @@ class peer():
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
             if queue:
-                queue.write("Unable to create socket", queue)
+                peer.write("Unable to create socket", queue)
             else:
                 print("unable to create socket")
             return
@@ -594,10 +594,9 @@ def main(stdscr):
         server_address = (server_ip, server_port)
         FILE_DIRECTORY = config.peerFolder
         
-        print("Tracker server located at {}:{}".format(*server_address))
         thost, tport = server_ip, server_port
     else:
-        print("Could not find config file {}!".format("./clientThreadedConfig.cfg"))
+        print("Could not find config file '{}'!".format("./clientThreadedConfig.cfg"))
         time.sleep(5)
         return
 
