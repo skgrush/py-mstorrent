@@ -245,7 +245,8 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         self.request.sendall( b"<REP LIST END>\n" )
         
-        print("Successfully send REP response.")
+        print("Successfully send REP response to {0[0]}:{0[1]}.".format(
+                                                    self.request.getpeername()))
         return
     
     
@@ -274,11 +275,13 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         self.request.sendall( bytes( "<REP GET END {}>\n".format(tf.md5),
                                                    *apiutils.encoding_defaults))
         
-        print("Sent REP response for {!r}".format(track_fname))
+        print("Sent REP response for {0!r} to {1[0]}:{1[1]}".format(track_fname,
+                                                    self.request.getpeername()))
     
     def api_hello(self, *_):
         self.request.sendall( b"<HELLO>\n" )
-        print("Sent HELLO response")
+        print("Sent HELLO response to {0[0]}:{0[1]}".format(
+                                                    self.request.getpeername()))
     
     def exception(self, exceptionType, exceptionInfo=''):
         
