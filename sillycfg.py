@@ -240,7 +240,8 @@ class cfgfile:
         inst = cls(path,maxread)
         
         if not inst.exists():
-            return False
+            raise FileNotFoundError(2, "Couldn't find file {}.".format(path),
+                                                                        path)
         
         inst.readIn()
         inst.parseContents()
