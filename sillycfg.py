@@ -19,6 +19,10 @@ Attributes:
     IGNORE_COMMENT_LINES (bool): Whether or not to ignore #comment lines.
 """
 
+__license__ = "MIT"
+__docformat__ = 'reStructuredText'
+
+
 import os
 import os.path
 from ipaddress import IPv4Address,AddressValueError

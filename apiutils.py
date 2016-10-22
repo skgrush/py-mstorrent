@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*
 
 __license__ = "MIT"
+__docformat__ = 'reStructuredText'
 
 
 import re

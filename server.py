@@ -3,6 +3,9 @@
 """Tracker server for hosting .track torrent files.
 """
 
+__license__ = "MIT"
+__docformat__ = 'reStructuredText'
+
 import socket
 import socketserver
 import threading
