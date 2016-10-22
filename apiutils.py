@@ -21,7 +21,7 @@ default_encoding_errors = 'replace'
 """str: error handling scheme for encoding/decoding API messages."""
 
 encoding_defaults = (default_encoding,default_encoding_errors)
-"""tuple: convenience value containing (:data:`.default_encoding, 
+"""tuple: convenience value containing (:data:`.default_encoding`, 
 :data:`default_encoding_errors`)"""
 
 def arg_encode(arg):

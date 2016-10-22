@@ -25,7 +25,13 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
     """
     
     def handle(self):
-        """Convert peer requests into methods
+        """Convert peer requests into api_* methods.
+        
+        This method is called when data is received. It interprets the
+        command-and-arguments structure dictated by the API into a method
+        to which the interpreted arguments are passed. Arguments are decoded
+        using :func:`apiutils.arg_decode` before being passed on, but they
+        remain strings.
         """
         
         #get (MAX_MESSAGE_LENGTH + 1) bytes
@@ -60,6 +66,7 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         api_method = getattr( self, 'api_{}'.format(command),None )
         if not api_method:
             print("Bad method: {}".format(command) )
+            #this is out-of-spec, but necessary
             return self.exception( 'BadRequest', "No such method {!r}".format(
                                                                       command) )
         
@@ -204,6 +211,11 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
     
     
     def api_req(self, *_):
+        """Implements the so-called "list" API command (<REQ LIST>).
+        
+        The method expects no arguments, but will accept them for compatibility.
+        """
+        
         thelist = []
         tracklist = []
         
@@ -241,6 +253,11 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
     
     
     def api_get(self, track_fname):
+        """Implements the GET API command.
+        
+        *track_fname* should be the name of a .track file in the torrents
+        directory given in the server config file.
+        """
         track_fname = str(track_fname)
         
         tfpath = os.path.join( self.server.torrents_dir, track_fname )
@@ -269,6 +286,12 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
                                                     self.request.getpeername()))
     
     def api_hello(self, *_):
+        """ Implements the out-of-spec API hello message.
+        
+        This API command takes no arguments (but accepts them) and simply
+        responds HELLO back. Used for helping the peer determine connectivity
+        and its public IP address.
+        """
         self.request.sendall( b"<HELLO>\n" )
         print("Sent HELLO response to {0[0]}:{0[1]}".format(
                                                     self.request.getpeername()))
