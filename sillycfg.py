@@ -191,6 +191,19 @@ class cfgfile:
     
     
     def validate(self):
+        """Validation function for config files.
+        
+        After checking if the object is fully instantiated and if it has been
+        validated already, this method calls the :meth:`._validate` method,
+        defined by subclasses, which checks the content types in the right
+        positions in the file according to the spec.
+        
+        Returns:
+            bool: If the file meets the spec.
+        
+        Raises:
+            NotFullyInstantiated: if :meth:`.readIn` hasn't been called.
+        """
         
         #if already validated, just return it
         if self.__valid is not None:
@@ -216,6 +229,11 @@ class cfgfile:
     @classmethod
     def fromFile(cls, path, maxread=DEFAULT_MAX_READ):
         """Read from *path*, and fully instantiate the class instance.
+        
+        Arguments:
+            path (str): File path to be read.
+            maxread (int, optional): Maximum number of bytes to read from the
+                file. Defaults to :const:`~sillycfg.DEFAULT_MAX_READ`.
         
         Calls :meth:`.readin` and :meth:`parseContents` so you don't have to!
         """
@@ -279,6 +297,9 @@ class ClientConfig(cfgfile):
         """ClientConfig-specific attribute, port of the tracker server.
         
         Should be first or second line of config.
+        
+        raises:
+            InvalidCfg: If :meth:`~.validate` returns False.
         """
         if not self.validate():
             raise InvalidCfg
@@ -290,6 +311,9 @@ class ClientConfig(cfgfile):
         """ClientConfig-specific attribute, IP of the tracker server
         
         Should be first or second line of config.
+        
+        raises:
+            InvalidCfg: If :meth:`~.validate` returns False.
         """
         if not self.validate():
             raise InvalidCfg
@@ -302,6 +326,9 @@ class ClientConfig(cfgfile):
         
         NOT DEFINED BY SPEC.
         Should be third line of config.
+        
+        raises:
+            InvalidCfg: If :meth:`~.validate` returns False.
         """
         if not self.validate():
             raise InvalidCfg
@@ -313,6 +340,9 @@ class ClientConfig(cfgfile):
         """ClientConfig-specific attribute, client updatetracker interval.
         
         Should be the last line of config.
+        
+        raises:
+            InvalidCfg: If :meth:`~.validate` returns False.
         """
         if not self.validate():
             raise InvalidCfg
