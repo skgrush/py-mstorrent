@@ -76,7 +76,7 @@ class InvalidCfg(RuntimeError):
     """
     pass
 
-class cfgfile:
+class BaseConfig:
     """Base class for config file abstractions.
     
     Note:
@@ -269,7 +269,7 @@ class cfgfile:
         return len(self.cfgValues)
 
 
-class ClientConfig(cfgfile):
+class ClientConfig(BaseConfig):
     """Client config file abstraction.
     
     Spec defines that *"First 2 lines are port no and IP address of the tracker
@@ -352,7 +352,7 @@ class ClientConfig(cfgfile):
 
 
 
-class ServerConfig(cfgfile):
+class ServerConfig(BaseConfig):
     """Server config file abstraction.
     
     Spec defines that *"[f]irst line is the port no to which the peer listens...
