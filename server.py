@@ -89,8 +89,6 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         except ValueError:
             print("Either fsize ({!r}) or port ({!r}) is not a valid " \
                                                 "integer".format(fsize,port))
-            ##return self.exception('ValueError',"Either fsize ({!r}) or port " \
-            ##        "({!r}) is not a valid integer".format(fsize,port) )
             self.request.sendall( b"<createtracker fail>" )
             return
         
@@ -98,8 +96,6 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             ip = IPv4Address(ip)
         except AddressValueError:
             print("Malformed IP Address: {!r}".format(ip))
-            ##return self.exception('ValueError',"Malformed IP address: " \
-            ##                                            "{!r}".format(ip) )
             self.request.sendall( b"<createtracker fail>" )
             return
         
@@ -119,9 +115,6 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             tf = trackerfile.trackerfile( fname, fsize, descrip, md5 )
         except Exception as err:
             print(err)
-            ##return self.exception('RuntimeError',"The following exception " \
-            ##        "occurred while creating the trackerfile:\n" \
-            ##        "{!s}".format(err) )
             self.request.sendall( b"<createtracker fail>" )
             return
         
@@ -161,9 +154,6 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         except ValueError:
             print("Either start_bytes ({!r}), end_bytes ({!r}), or port ({!r})"\
                    " is not a valid integer".format(start_bytes,end_bytes,port))
-            ##return self.exception('ValueError',"Either start_bytes ({!r}), " \
-            ##               "end_bytes ({!r}), or port ({!r}) is not a valid "\
-            ##               "integer".format(start_bytes,end_bytes,port))
             self.request.sendall( b"<updatetracker fail>" )
             return
         
@@ -171,8 +161,6 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             ip = IPv4Address(ip)
         except AddressValueError:
             print("Malformed IP Address: {!r}".format(ip))
-            ##return self.exception('ValueError',"Malformed IP address: " \
-            ##                                            "{!r}".format(ip) )
             self.request.sendall( b"<updatetracker fail>" )
             return
         
