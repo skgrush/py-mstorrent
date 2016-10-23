@@ -45,11 +45,16 @@ class trackerfile(tuple):
     Attributes:
         _peers (dict): Dictionary of peers in the tracker file.
             
-            key: (:class:`ipaddress.IPv4Address` *peer_ip*, :obj:`int` *peer_port*)
+            key: (:class:`ipaddress.IPv4Address` *peer_ip*, 
+            :obj:`int` *peer_port*)
             
             value: (:obj:`int` *start_byte*, :obj:`int` *end_byte*, 
             :class:`~datetime.datetime` *timestamp*)
-    
+        
+        filename (str): Name of the file being tracked.
+        filesize (int): Size in bytes of the file.
+        description (str): Description of the file.
+        md5 (str): MD5 hash of the file.
     """
     
     __slots__ = ()
@@ -79,30 +84,22 @@ class trackerfile(tuple):
     
     @property
     def filename(self):
-        """str: Name of the file being tracked"""
         return self[0]
     
     @property
     def filesize(self):
-        """int: Size in bytes of the file"""
         return self[1]
     
     @property
     def description(self):
-        """str: Description of the file"""
         return self[2]
     
     @property
     def md5(self):
-        """str: MD5 hash of the file"""
         return self[3]
     
     @property
     def _peers(self):
-        """dict: Dictionary of peers in the tracker file.
-        
-        (More documented in trackerfile docstring)
-        """
         return self[4]
     
     
