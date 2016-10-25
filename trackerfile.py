@@ -3,7 +3,7 @@
 """Abstraction and handling of .track files.
 
 Attributes:
-    peer_update_interval (int): Peers will be forgotten after this many
+    PEER_UPDATE_INTERVAL (int): Peers will be forgotten after this many
         seconds. 
     
     _re_md5 (RegEx): Case-insensitive RegEx pattern matching 32-char MD5 hashes.
@@ -21,7 +21,7 @@ from ipaddress import IPv4Address
 import apiutils
 
 
-peer_update_interval = 15 * 60 #15 minutes by default
+PEER_UPDATE_INTERVAL = 15 * 60 #15 minutes by default
 _re_md5 = re.compile('^[0-9a-f]{32}$', re.A|re.I)
 _DEFAULT_ENCODING = "utf-8"
 
@@ -311,12 +311,18 @@ class trackerfile(tuple):
         return tuple( parts )
     
     
-    def clean(self):
-        """Removes out-of-date peers"""
+    def clean(self, update_interval=PEER_UPDATE_INTERVAL):
+        """Removes out-of-date peers.
+        
+        arguments:
+            update_interval (int, optional): the amount of time in seconds
+                after which a peer should be forgotten. Defaults to
+                :const:`trackerfile.PEER_UPDATE_INTERVAL`.
+        """
         
         #threshold for dropping peers
         thresh = datetime.datetime.utcnow() - \
-                 datetime.timedelta(peer_update_interval)
+                 datetime.timedelta(update_interval)
         
         for peer, values in self._peers.items():
             if values[2] < thresh:
