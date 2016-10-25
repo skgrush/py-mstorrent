@@ -143,7 +143,7 @@ class BaseConfig:
         Returns:
             bool
         """
-        return os.path.exists(self.cfgPath)
+        return os.path.isfile(self.cfgPath)
     
     
     def readIn(self):
