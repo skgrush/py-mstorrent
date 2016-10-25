@@ -27,6 +27,7 @@ _DEFAULT_ENCODING = "utf-8"
 
 
 class MalformedTrackerFileException(Exception):
+    """Raised when parsing a tracker file if the format is malformed."""
     pass
 
 class trackerfile(tuple):
@@ -356,11 +357,11 @@ class trackerfile(tuple):
             peer_port (int): port of peer to be removed
         
         Returns:
-            bool: True if pair was removed, False if pair not found.
+            bool: True if pair was removed, otherwise False.
         
         Raises:
             AddressValueError: if *peer_ip* isn't a valid IPv4 address
-            TypeError,ValueError: if *peer_port* isn't an int
+            TypeError,ValueError: if *peer_port* isn't int-coercible
         """
         
         peer = IPv4Address(peer_ip),int(peer_port)
@@ -426,7 +427,7 @@ class trackerfile(tuple):
         Does not close *sock*. 
         
         Args:
-            sock (:class:`~socket.socket`): The file to be written to
+            sock (:class:`~socket.socket`): The socket to be written to.
         """
         
         #write metadata

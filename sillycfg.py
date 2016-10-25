@@ -230,12 +230,18 @@ class BaseConfig:
     def fromFile(cls, path, maxread=DEFAULT_MAX_READ):
         """Read from *path*, and fully instantiate the class instance.
         
+        Calls :meth:`.readin` and :meth:`parseContents` so you don't have to!
+        
         Arguments:
             path (str): File path to be read.
             maxread (int, optional): Maximum number of bytes to read from the
                 file. Defaults to :const:`~sillycfg.DEFAULT_MAX_READ`.
         
-        Calls :meth:`.readin` and :meth:`parseContents` so you don't have to!
+        Raises:
+            FileNotFoundError: If *path* doesn't exist.
+        
+        Returns:
+            A new instance of the class.
         """
         inst = cls(path,maxread)
         
