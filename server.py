@@ -192,6 +192,9 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             self.request.sendall( b"<updatetracker fail>" )
             return
         
+        #clean trackerfile
+        tf.clean()
+        
         #add peer peer
         try:
             tf.updatePeer( ip, port, start_bytes, end_bytes )
@@ -278,6 +281,9 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         except Exception as err:
             print(err)
             return self.exception(type(err).__name__, str(err))
+        
+        #clean trackerfile
+        tf.clean()
         
         #write the tracker file to the socket
         self.request.sendall( b"<REP GET BEGIN>\n" )
