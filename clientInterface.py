@@ -2,9 +2,7 @@
 
 import curses
 import multiprocessing
-import sys
 import threading
-import time
 
 class clientInterface():
     """ A curses-based user interface
@@ -14,6 +12,10 @@ class clientInterface():
     """
 
     def __init__(self, stdscr, commands):
+        # Bind command line interpreter
+        self.commands = commands
+
+        # Initialize UI elements
         y, x, = stdscr.getmaxyx()
         self.scrolly, self.scrollx = 0, 0
         self.py, self.px = 100*y, x
@@ -22,10 +24,11 @@ class clientInterface():
         self.pad = curses.newpad(self.py, self.px)
         self.linecount = 0
 
+        # Create threads and message queue
         self.queue = multiprocessing.Queue()
         self.inp = threading.Thread(name="input_recv", target=self.input_loop)
         self.receiver = threading.Thread(name="msg_recv", target=self.writer, daemon=True)
-        self.commands = commands
+
 
     def begin(self):
         """ Starts the user input and message display theads
@@ -157,8 +160,3 @@ class clientInterface():
             self.commands.onecmd(msg)
         except Exception as err:
             self.queue.put(str(err))
-
-        #p = multiprocessing.Process(target = f, args = (self.queue,))
-        #self.processes.append(p)
-        #p.start()
-
