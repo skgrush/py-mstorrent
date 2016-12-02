@@ -2,13 +2,20 @@
 
 import curses
 import multiprocessing
-import sys
 import threading
-import time
 
 class clientInterface():
+    """ A curses-based user interface
+    Arguments:
+        stdscr: The curses screen, as received by main
+        commands: A command line interpreter which implements cmd.Cmd
+    """
 
-    def __init__(self, stdscr, commands, args):
+    def __init__(self, stdscr, commands):
+        # Bind command line interpreter
+        self.commands = commands
+
+        # Initialize UI elements
         y, x, = stdscr.getmaxyx()
         self.scrolly, self.scrollx = 0, 0
         self.py, self.px = 100*y, x
@@ -17,17 +24,21 @@ class clientInterface():
         self.pad = curses.newpad(self.py, self.px)
         self.linecount = 0
 
+        # Create threads and message queue
         self.queue = multiprocessing.Queue()
         self.inp = threading.Thread(name="input_recv", target=self.input_loop)
         self.receiver = threading.Thread(name="msg_recv", target=self.writer, daemon=True)
-        self.commands = commands
-        self.args = args
+
 
     def begin(self):
+        """ Starts the user input and message display theads
+        """
         self.inp.start()
         self.receiver.start()
 
     def draw_pad(self):
+        """ Redraws the main message display pad
+        """
         y, x = self.stdscr.getmaxyx()
         sy, sx = self.scrolly, self.scrollx
         py, px = self.py, self.px
@@ -39,6 +50,8 @@ class clientInterface():
         curses.doupdate()
 
     def input_loop(self):
+        """ Gathers keyboard input from the user and sends it to the command interpreter upon pressing enter
+        """
         y, x = self.user_input.getbegyx()[0], self.user_input.getmaxyx()[1]
         self.user_input.keypad(1)
 
@@ -103,6 +116,8 @@ class clientInterface():
 
 
     def writer(self):
+        """ Thread for writing messages to the message pad
+        """
         while True:
             try:
                 msg = self.queue.get()
@@ -111,6 +126,11 @@ class clientInterface():
                 break
 
     def write_msg(self, msg):
+        """ Writes a single message into the message pad
+
+        Arguments:
+            msg (str): The text to be added to the end of the message pad
+        """
         if curses.isendwin():
             return
 
@@ -131,12 +151,12 @@ class clientInterface():
 
 
     def send_command(self, msg):
+        """ Attempts to execute a command
+
+        Arguments:
+            msg (str): the raw text from the command line, to be interpreted by the cmd.Cmd module
+        """
         try:
             self.commands.onecmd(msg)
         except Exception as err:
             self.queue.put(str(err))
-
-        #p = multiprocessing.Process(target = f, args = (self.queue,))
-        #self.processes.append(p)
-        #p.start()
-
