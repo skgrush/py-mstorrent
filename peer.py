@@ -661,7 +661,7 @@ def main(stdscr):
     # Set up the client interface and point stdout to the message queue
     commandline = interpreter()
 
-    cli = clientInterface(stdscr, commandline, cmds)
+    cli = clientInterface(stdscr, commandline)
     commandline.message_queue = cli.queue
     sys.stdout = commandline
     sys.stderr = commandline
