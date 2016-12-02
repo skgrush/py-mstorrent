@@ -10,10 +10,10 @@ import cmd
 import hashlib
 import os
 import sillycfg
+import sys
 
 import socket
 import socketserver
-
 import trackerfile
 
 myip = None
