@@ -154,7 +154,7 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         
     
 class peer():
-    """ Main Peer class; handles 
+    """ Main Peer class; handles job-2 and job-3 for file hosting and downloading
     """
     def __init__(self, config):
         self.config = config
@@ -306,6 +306,11 @@ class downloader():
         print("Download process ended.")
 
     def spawn_thread(self, file):
+        """ Spawns a new downloader thread
+
+        Arguments:
+            file (str): The name of the tracker file
+        """
         try:
             tracker = trackerfile.trackerfile.fromPath(FILE_DIRECTORY + file)
             worker = threading.Thread(name=file, target=self.download, args=(tracker, ) )
@@ -316,6 +321,8 @@ class downloader():
 
 
     def download(self, tracker):
+        """ 
+        """
         fname = tracker[0]
         log = []
         
