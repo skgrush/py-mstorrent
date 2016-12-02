@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+""" Peer-to-peer file transfer client
+"""
 
 from clientInterface import *
 import apiutils
@@ -28,10 +30,15 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
     """
     
     def handle(self):
-        """Convert peer requests into methods
+        """Convert peer requests into into api_* methods
+
+        This method is called when data is received. It interprets the
+        command-and-arguments structure dictated by the API into a method
+        to which the interpreted arguments are passed. Arguments are decoded
+        using :func:`apiutils.arg_decode` before being passed on, but they
+        remain strings.
         """
         
-        #get (MAX_MESSAGE_LENGTH + 1) bytes
         data = str(self.request.recv(4096), *apiutils.encoding_defaults)
         
         #Retrieve command and args from message
@@ -65,6 +72,14 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
                 return self.exception('BadRequest', err.args[0])
 
     def api_get(self, seg, fname, start_byte, chunk_size):
+        """Implements the peer's GET API command.
+        
+        All arguments are expected to be strings, but *start_byte* and *chunk_size*
+        should be castable to :class:`int`.
+        """
+        if seg != "SEG":
+            print("GET Error: {}".format(seg))
+            return self.exception("BadRequest", "'SEG' expected")
         print("Received request for '{}', starting from byte {} with chunk size {}".format(fname, start_byte, chunk_size))
         if int(chunk_size) > CHUNK_SIZE:
             return self.request.sendall(b"<GET invalid>\n")
@@ -234,14 +249,17 @@ class peer():
         queue.put(str(message))
 
 class downloader():
+    """ The chunk downloader
+    """
 
     workers = []
 
     def __init__(self, queue):
         self.queue = queue
 
-    # Spawns new download threads for each tracker file
     def spawn(self):
+        """ Spawns new download threads for each tracker file in FILE_DIRECTORY
+        """
         # Get the tracker files currently present
         try:
             trackerfiles = [ f for f in os.listdir(FILE_DIRECTORY) if os.path.isfile(os.path.join(FILE_DIRECTORY, f)) ]
@@ -484,12 +502,20 @@ class downloader():
 
 
 class interpreter(cmd.Cmd):
+    """ The command line interpreter for interfacing the user with the API methods
+
+    Implements cmd.Cmd, so all do_* methods are callable via the curses command line
+    """
+
     def __init__(self):
         self.stdout = self
         self.download_queue = None
         pass
 
     def str_to_args(string):
+        """ Converts a space and quote-delimited string to a list of arguments,
+        giving priority to quotes so that arguments may have spaces in them
+        """
         import re
         if string == "":
             return []
@@ -504,6 +530,8 @@ class interpreter(cmd.Cmd):
         return args
 
     def do_help(self, line):
+        """ Displays a help message for how to use the command line interface or a specific API function
+        """
         x = cmds["help"].parse_args(interpreter.str_to_args(line))
 
         if not line:
@@ -522,6 +550,8 @@ class interpreter(cmd.Cmd):
 
 
     def do_createtracker(self, line):
+        """ Sends a createtracker API command to the server
+        """
         x = cmds["createtracker"].parse_args(interpreter.str_to_args(line))
         fname, descrip = apiutils.arg_encode(x.fname), apiutils.arg_encode(x.descrip)
         self.write("Creating tracker file for {}".format(x.fname))
@@ -534,28 +564,36 @@ class interpreter(cmd.Cmd):
             self.write("Unable to find file {} or file is empty".format(x.fname))
 
     def do_updatetracker(self, line):
+        """ Sends an updatetracker API command to the server
+        """
         parse = cmds["updatetracker"].parse_args(interpreter.str_to_args(line))
         downloader.updatetracker(parse.fname, parse.start_byte, parse.end_byte, parse.host or thost, parse.port or tport)
 
     def do_gettracker(self, line):
+        """ Sends a gettracker API command to the server
+        """
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
         if downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
             # Tell the downloader thread that there is a new tracker file
             self.download_queue.put("NEW {}.track".format(parse.fname))
 
     def do_GET(self, line):
+        """ Sends a GET API command to a peer
+        """
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
         response = peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size), self.message_queue)
         self.write(response)
 
     def do_REQ(self, line):
+        """ Sends the REQ LST api command to the server
+        """
         parse = cmds["REQ"].parse_args(interpreter.str_to_args(line))
         host, port = parse.host or thost, parse.port or tport
         self.write("Requesting list of tracker files from tracker {}:{}".format(host, port))
         response = peer.send(peer, host, port, "<REQ LIST>", self.message_queue)
         self.write(response)
 
-    # stdout and stderr
+    # Override for stdout and stderr, so that output is sent to the thread-safe message queue
     def write(self, msg):
         self.message_queue.put(str(msg))
 
