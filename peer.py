@@ -18,13 +18,9 @@ import trackerfile
 
 myip = None
 
-# Put these in a config
-thost = '127.0.0.1'
-tport = 9999
 STARTPORT = 11000
 CHUNK_SIZE = 1024
 
-# Basically a copypaste of server.py
 class PeerServerHandler(socketserver.BaseRequestHandler):
     """The request handler for PeerServer.
     """
@@ -158,12 +154,13 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         
     
 class peer():
-    def __init__(self, config, message_queue):
+    """ Main Peer class; handles 
+    """
+    def __init__(self, config):
         self.config = config
-        self.message_queue = message_queue
         global STARTPORT
         if STARTPORT < 1024:
-            peer.write("Warning: Port {} may be reserved. Please use port 1024 or higher".format(STARTPORT), message_queue)
+            print("Warning: Port {} may be reserved. Please use port 1024 or higher".format(STARTPORT))
 
         while True:
             try:
@@ -184,13 +181,19 @@ class peer():
         self.download = downloader(self.child_conn)
         self.downloader = multiprocessing.Process(target = self.download.spawn)
 
-    # Begin processes for job-2 and job-3
     def begin(self):
+        """ Begin job-2 and job-3, the chunk server and downloader processes
+        """
         self.server.start()
         self.downloader.start()
         pass
 
-    def createtracker(filename, description):
+    def createtracker(filename):
+        """ Create the supplementary log file for a tracker. 
+        Also computes and returns the size and md5 of the local file
+        Arguments:
+            filename (str): The name of the local file, which must exist in FILE_DIRECTORY (under #directory in config)
+        """
         # Get the size
         try:
             size = os.path.getsize(FILE_DIRECTORY + filename)
@@ -217,15 +220,19 @@ class peer():
 
         return (size, md5.hexdigest())
 
-    def send(self, ip, port, message, queue=None):
+    def send(self, ip, port, message):
+        """ Sends a message over the network
+
+        Arguments:
+            ip (:class:`~ipaddress.IPv4Address`): The target address
+            port (int): The target port
+            message (str): The message to send to the server
+        """
         global myip
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
-            if queue:
-                peer.write("Unable to create socket", queue)
-            else:
-                print("unable to create socket")
+            print("unable to create socket")
             return
 
         s.connect((ip, int(port)))
@@ -244,9 +251,6 @@ class peer():
 
         s.close()
         return resp.decode(*apiutils.encoding_defaults)
-
-    def write(message, queue):
-        queue.put(str(message))
 
 class downloader():
     """ The chunk downloader
@@ -308,7 +312,7 @@ class downloader():
             self.workers.append(worker)
             worker.start()
         except Exception as err:
-            self.message_queue.put(err)
+            print(err)
 
 
     def download(self, tracker):
@@ -391,11 +395,20 @@ class downloader():
 
 
     def get(self, file, start_byte, end_byte, ip, port):
+        """ Sends a GET SEG request
+
+        Parameters:
+            file (str): The name of the file being downloaded
+            start_byte (int): The first byte in the range
+            end_byte (int): The last byte in the range
+            ip (str): The address of the peer which has the desired chunk
+            port (int): The port number of the target peer's chunk server
+        """
         global myip
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
-            peer.write("Unable to create socket", queue)
+            print("Unable to create socket")
             return
 
         s.connect((ip, int(port)))
@@ -416,10 +429,12 @@ class downloader():
 
         return resp.decode(*apiutils.encoding_defaults)
 
-    def gettracker(file, host=thost, port=tport):
+    def gettracker(file, host, port):
+        """ Sends a GET request for a tracker file
+        """
         message = "<GET {}.track>".format(apiutils.arg_encode(file))
         
-        response = peer.send(peer, host, port, message, None)
+        response = peer.send(peer, host, port, message)
         print(response)
 
         match = apiutils.re_apicommand.match(response)
@@ -433,7 +448,9 @@ class downloader():
         else:
             print(apiutils.arg_decode(response))
 
-    def updatetracker(file, start_byte, end_byte, host=thost, port=tport):
+    def updatetracker(file, start_byte, end_byte, host, port):
+        """ Sends an updatetracker command to the server
+        """
         fname = apiutils.arg_encode(file)
         msg = "<updatetracker {} {} {} {} {}>".format(fname, start_byte, end_byte, myip, STARTPORT)
         response = peer.send(peer, host, port, msg)
@@ -453,6 +470,13 @@ class downloader():
         return response
 
     def size_remaining(log, tracker):
+        """ Compute the remaining number of bytes needed to finish downloading the torrent corresponding
+        to the given log
+
+        Arguments:
+            log: A list of (start_byte, end_byte) tuples representing which chunks have been downloaded
+            tracker (:class:`~trackerfile.trackerfile`): The tracker corresponding to the file being downloaded
+        """
         filesize = int(tracker[1])
         cachesize = 0
 
@@ -462,6 +486,8 @@ class downloader():
         return filesize - cachesize
 
     def next_bytes(log, tracker):
+        """ Determines which chunk should be downloaded next for the given trackerfile
+        """
         peers = (tracker[4])
         for peer in peers:
             peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
@@ -479,6 +505,8 @@ class downloader():
 
 
     def update(cache, log, logpath, start, size, payload):
+        """ Updates the logfile based on the newly retreived chunk
+        """
         cache.seek(start)
         cache.write(payload)
         if not log:
@@ -535,17 +563,17 @@ class interpreter(cmd.Cmd):
         x = cmds["help"].parse_args(interpreter.str_to_args(line))
 
         if not line:
-            self.write(cmds["help"].format_help().replace("peer.py", "help"))
+            print(cmds["help"].format_help().replace("peer.py", "help"))
             commands = ""
             for command in cmds:
-                self.write(" " + command + "\t" + cmds[command].description)
-            self.write(commands)
+                print(" " + command + "\t" + cmds[command].description)
+            print(commands)
         else:
             if x.command in cmds:
                 c = cmds[x.command]
-                self.write(c.format_help().replace("peer.py", x.command))
+                print(c.format_help().replace("peer.py", x.command))
             else:
-                self.write("Unknown command '{}'".format(x.command))
+                print("Unknown command '{}'".format(x.command))
             
 
 
@@ -554,14 +582,14 @@ class interpreter(cmd.Cmd):
         """
         x = cmds["createtracker"].parse_args(interpreter.str_to_args(line))
         fname, descrip = apiutils.arg_encode(x.fname), apiutils.arg_encode(x.descrip)
-        self.write("Creating tracker file for {}".format(x.fname))
-        fsize, fmd5 = peer.createtracker(x.fname, x.descrip)
+        print("Creating tracker file for {}".format(x.fname))
+        fsize, fmd5 = peer.createtracker(x.fname)
         if fsize > 0:
             message = "<createtracker {} {} {} {} {} {}>".format(fname, fsize, descrip, fmd5, myip, STARTPORT)
-            self.write(message)
-            response = peer.send(peer, (x.host or thost), (x.port or tport), message, self.message_queue)
+            print(message)
+            response = peer.send(peer, (x.host or thost), (x.port or tport), message)
         else:
-            self.write("Unable to find file {} or file is empty".format(x.fname))
+            print("Unable to find file '{}'' or file is empty".format(x.fname))
 
     def do_updatetracker(self, line):
         """ Sends an updatetracker API command to the server
@@ -581,17 +609,17 @@ class interpreter(cmd.Cmd):
         """ Sends a GET API command to a peer
         """
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
-        response = peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size), self.message_queue)
-        self.write(response)
+        response = peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size))
+        print(response)
 
     def do_REQ(self, line):
         """ Sends the REQ LST api command to the server
         """
         parse = cmds["REQ"].parse_args(interpreter.str_to_args(line))
         host, port = parse.host or thost, parse.port or tport
-        self.write("Requesting list of tracker files from tracker {}:{}".format(host, port))
-        response = peer.send(peer, host, port, "<REQ LIST>", self.message_queue)
-        self.write(response)
+        print("Requesting list of tracker files from tracker {}:{}".format(host, port))
+        response = peer.send(peer, host, port, "<REQ LIST>")
+        print(response)
 
     # Override for stdout and stderr, so that output is sent to the thread-safe message queue
     def write(self, msg):
@@ -670,9 +698,9 @@ def main(stdscr):
 
     # Initialize the server and downloader processes
     try:
-        response = peer.send(peer, *server_address, "<HELLO>", cli.queue)
+        response = peer.send(peer, *server_address, "<HELLO>")
 
-        my_peer = peer(config, cli.queue)
+        my_peer = peer(config)
 
         commandline.download_queue = my_peer.download.queue
 
@@ -681,7 +709,6 @@ def main(stdscr):
         print("Critical failure in initialization")
         print(err)
 
-    #print(my_peer.srv.config)
 
     cli.inp.join()
     curses.curs_set(0)
