@@ -11,6 +11,7 @@ import hashlib
 import os
 import sillycfg
 import sys
+import time
 
 import socket
 import socketserver
@@ -276,6 +277,7 @@ class downloader():
             if file[-6:].lower() == ".track" and not os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
                 self.spawn_thread(file)
 
+        # Listen for additional tracker files
         while True:
             try:
                 msg = self.queue.get().split(" ")
@@ -285,8 +287,8 @@ class downloader():
                     file = " ".join(msg[1:])
                     print(file)
                     if file[-6:].lower() == ".track":
-                        if os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])):
-                            print("File '{}' already exists, no need to make new download thread".format(file[:-6]))
+                        if os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])) or os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6] + ".log")):
+                            print("Log file for '{}' already exists, no need to make new download thread".format(file[:-6]))
                         else:
                             print("Spawning thread for {}".format(file[:-6]))
                             self.spawn_thread(file)
@@ -347,10 +349,21 @@ class downloader():
         else:
             cache = open(cachepath, "r+b")
 
+        dead_peers = []
 
         while downloader.size_remaining(log, tracker) > 0:
-            peer, start, size = downloader.next_bytes(log, tracker)
-            chunk = self.get(apiutils.arg_encode(fname), start, size, str(peer[0]), peer[1])
+            peer, start, size = downloader.next_bytes(log, tracker, dead_peers)
+            if not peer:
+                time.sleep(0.5)
+
+                continue
+            try:
+                chunk = self.get(apiutils.arg_encode(fname), start, size, str(peer[0]), peer[1])
+            except ConnectionRefusedError as err:
+                print("Dead peer!")
+                dead_peers.append(peer)
+                time.sleep(0.5)
+                continue
             match = apiutils.re_apicommand.match(chunk)
             if match and match.group(1) == "GET":
                 payload = base64.b64decode(chunk.replace(match.group() + "\n", ""))
@@ -363,7 +376,9 @@ class downloader():
                 time.sleep(0.01)
             else:
                 print("Error. {}".format(apiutils.arg_decode(chunk)))
+                dead_peers.append(peer)
                 time.sleep(0.5)
+
                 # Request an updated tracker file
 
 
@@ -492,23 +507,54 @@ class downloader():
 
         return filesize - cachesize
 
-    def next_bytes(log, tracker):
+    def next_bytes(log, tracker, failed_peers = ()):
         """ Determines which chunk should be downloaded next for the given trackerfile
+
+        As per the specification:
+            Segment selection: The to-be-downloaded segment(s) is (are) chosen sequentially.
+            Peer selection: The peer which has the newest timestamp is selected to be connected to
         """
         peers = (tracker[4])
-        for peer in peers:
-            peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
+        freq = dict()
 
-            if not log:
-                return (peer, peer_start, min(CHUNK_SIZE, peer_end - peer_start + 1))
-            
-            need = int(log[0][1])
+        # Sort by start byte
+        peer_list = sorted(peers.keys(), key=lambda k: int(peers[k][0]))
 
-            if need >= peer_start and need <= peer_end:
-                return (peer, need, min(CHUNK_SIZE, peer_end - need + 1))
+        start_byte, end_byte = None, None
+
+        for peer in peer_list:
+            if peer not in failed_peers:
+                peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
+                
+                needed = True
+                for entry in log:
+                    if entry[0] <= peer_start and entry[1] >= peer_end:
+                        needed = False
+                        break
+                    else:
+                        if entry[1] >= peer_start and entry[1] < peer_end:
+                            start_byte = entry[1]
+                if needed:
+                    if start_byte == None:
+                        start_byte = peer_start
+                    break
+
+        # Sort by peer timestamp
+        peer_list = list(reversed(sorted(peers.keys(), key=lambda k: peers[k][2])))
+
+        if start_byte != None:
+            for peer in peer_list:
+                if peer not in failed_peers:
+                    peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
+
+                    if start_byte >= peer_start and start_byte <= peer_end:
+                        end_byte = min(CHUNK_SIZE, peer_end - start_byte + 1)
+
+                        return (peer, start_byte, end_byte)
+
 
         print("Could not find peer with useful chunk")
-        return None
+        return (None, None, None)
 
 
     def update(cache, log, logpath, start, size, payload):
@@ -516,12 +562,7 @@ class downloader():
         """
         cache.seek(start)
         cache.write(payload)
-        if not log:
-            log.append((start, size))
-            with open(logpath, "w") as l:
-                for st, en in log:
-                    l.write("{}:{}\n".format(st, en))
-            return True
+
         for i in range(len(log)):
             s, e = log[i]
             if e >= start and e <= start + size:
@@ -529,6 +570,13 @@ class downloader():
                 with open(logpath, "w") as l:
                     for st, en in log:
                         l.write("{}:{}\n".format(st, en))
+
+                # Update the tracker with the largest contiguous chunk
+                largest = max(log, key = lambda entry: entry[1] - entry[0])
+                filename = "".join(logpath.split("/")[-1].split(".log")[:-1])
+                downloader.updatetracker(filename, largest[0], largest[1] - 1, thost, tport)
+                
+
                 return True
 
 
@@ -679,7 +727,8 @@ def main(stdscr):
     global thost, tport, FILE_DIRECTORY
 
     # Read the config
-    config = sillycfg.ClientConfig.fromFile( "./clientThreadConfig.cfg" )
+    config_file = sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg"
+    config = sillycfg.ClientConfig.fromFile( config_file )
     if config.validate():
         server_port = config.serverPort
         server_ip = str(config.serverIP)
@@ -689,7 +738,7 @@ def main(stdscr):
         
         thost, tport = server_ip, server_port
     else:
-        print("Problem validating config file '{}'!".format("./clientThreadedConfig.cfg"))
+        print("Problem validating config file '{}'!".format( config_file ))
         time.sleep(5)
         return
 
@@ -701,7 +750,6 @@ def main(stdscr):
     sys.stdout = commandline
     sys.stderr = commandline
     clientInterface.begin(cli)
-
 
     # Initialize the server and downloader processes
     try:
