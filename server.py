@@ -283,7 +283,10 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
             return self.exception(type(err).__name__, str(err))
         
         #clean trackerfile
-        tf.clean()
+        if tf.clean():
+            with open( tfpath, 'w' ) as fl:
+                tf.writeTo( fl )
+        
         
         #write the tracker file to the socket
         self.request.sendall( b"<REP GET BEGIN>\n" )
