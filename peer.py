@@ -80,6 +80,12 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
 
         # Open the file
         path = os.path.join(self.server.torrents_dir, fname)
+        if not os.path.isfile(path):
+            path = path + ".cache"
+        if not os.path.isfile(path):
+            downloader.updatetracker(fname, 0, 0, thost, tport)
+            return self.exception("FileException", "Could not find file for torrent '{}'".format(fname))
+
         try:
             with open(path, "rb") as file:
                 file.seek(int(start_byte))
@@ -91,10 +97,10 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         except Exception as err:
             print(str(err))
             # Since the file doesn't exist, let the tracker know you're no longer hosting it
-            downloader.updatetracker(fname, 0, 0, thost, tport)
 
             # Return an Exception
-            return self.exception("FileException", "Could not find file for torrent '{}'".format(fname))
+            return self.exception("Exception when trying to serve file", str(err))
+
 
         self.request.sendall( bytes(response, *apiutils.encoding_defaults) )
         print("Transmitted bytes {}-{} of file {}".format(start_byte, int(start_byte) + len(payload), fname))
@@ -418,11 +424,12 @@ class downloader():
                     if downloader.gettracker(tracker[0], thost, tport):
                         fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
                         tracker = trackerfile.trackerfile.fromPath(fpath)
+                        time.sleep(5)
 
                 continue
 
             for peer, start, size in chunk_queue:
-                if len(downloading) > 4:
+                if len(downloading) > 5:
                     break
                 downloading.append((start, start + size))
 
@@ -618,6 +625,7 @@ class downloader():
                             size = min(CHUNK_SIZE, peer_end - start + 1)
                             chunk_queue.append((peer, start, size))
                             start += size
+                            break
                         return chunk_queue
 
 
