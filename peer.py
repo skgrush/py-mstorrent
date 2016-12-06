@@ -669,7 +669,7 @@ class downloader():
 
 class networkutil():
     def send(ip, port, message):
-        """ Sends a message over the network
+        """ Sends a message over the network and returns the response
 
         Arguments:
             ip (:class:`~ipaddress.IPv4Address`): The target address
@@ -713,6 +713,13 @@ class interpreter(cmd.Cmd):
         self.stdout = self
         self.download_queue = None
         pass
+
+    def command(self, line):
+        print("> {}".format(line))
+        try:
+            self.onecmd(line)
+        except Exception as err:
+            print(str(err))
 
     def str_to_args(string):
         """ Converts a space and quote-delimited string to a list of arguments,
@@ -796,10 +803,13 @@ class interpreter(cmd.Cmd):
         print(response)
 
 class stdioverride():
+    """ Assign stdout to an instance of this class so that output is sent to 
+        the thread-safe message queue.
+    """
+
     def __init__(self, message_queue):
         self.message_queue = message_queue
 
-    # Override for stdout and stderr, so that output is sent to the thread-safe message queue
     def write(self, msg):
         self.message_queue.put(str(msg))
 
@@ -846,11 +856,11 @@ cmds["GET"].add_argument("host", type=str, help="Peer ip")
 cmds["GET"].add_argument("port", type=int, help="Peer port")
 
 
-def main(stdscr):
+def main(stdscr, demo_module=None, config_name=None):
     global thost, tport, FILE_DIRECTORY, UPDATE_INTERVAL
 
     # Read the config
-    config_file = sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg"
+    config_file = config_name or (sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg")
     config = sillycfg.ClientConfig.fromFile( config_file )
     if config.validate():
         server_port = config.serverPort
@@ -887,6 +897,14 @@ def main(stdscr):
     except Exception as err:
         print("Critical failure in initialization")
         print(err)
+
+    if demo_module:
+
+        try:
+            demo_module.run(commandline)
+        except Exception as err:
+            print("Error when running demo")
+            print(err)
 
     try:
         cli.inp.join()
