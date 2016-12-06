@@ -439,7 +439,7 @@ class downloader():
                 sel.register(s, selectors.EVENT_WRITE, message)
                 try:
                     s.connect((str(peer[0]), int(peer[1])))
-                except ConnectionRefusedError:
+                except ConnectionError:
                     print("Dead peer {}!".format(peer))
                     dead_peers.append(peer)
                     downloading.remove((start, start + size))
@@ -777,7 +777,6 @@ class interpreter(cmd.Cmd):
         fsize, fmd5 = peer.createtracker(x.fname)
         if fsize > 0:
             message = "<createtracker {} {} {} {} {} {}>".format(fname, fsize, descrip, fmd5, myip, STARTPORT)
-            print(message)
             response = networkutil.send((x.host or thost), (x.port or tport), message)
         else:
             print("Unable to find file '{}'' or file is empty".format(x.fname))
