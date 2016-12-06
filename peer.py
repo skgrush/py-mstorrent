@@ -3,19 +3,11 @@
 """
 
 from clientInterface import *
-import apiutils
-import argparse
-import base64
-import cmd
-import hashlib
-import os
-import sillycfg
-import sys
-import time
-
-import socket
-import socketserver
-import trackerfile
+import base64, hashlib
+import cmd, argparse
+import os, sys, time
+import select, socket, socketserver
+import apiutils, trackerfile, sillycfg
 
 myip = None
 
@@ -99,7 +91,7 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         except Exception as err:
             print(str(err))
             # Since the file doesn't exist, let the tracker know you're no longer hosting it
-            # (todo)
+            downloader.updatetracker(fname, 0, 0, thost, tport)
 
             # Return an Exception
             return self.exception("FileException", "Could not find file for torrent '{}'".format(fname))
@@ -181,6 +173,8 @@ class peer():
         self.child_conn = multiprocessing.Queue()
         self.download = downloader(self.child_conn)
         self.downloader = multiprocessing.Process(target = self.download.spawn)
+
+        # Update the server about all the files you are hosting and periodically send updates (todo)
 
     def begin(self):
         """ Begin job-2 and job-3, the chunk server and downloader processes
@@ -323,11 +317,15 @@ class downloader():
 
 
     def download(self, tracker):
-        """ 
+        """ Downloads chunks corresponding to the provided tracker file
+
+        Arguments:
+            tracker (:class:`~trackerfile.trackerfile`): The tracker file corresponding to the file
+                you wish to download
         """
         fname = tracker[0]
         log = []
-        
+
         # Check if a log and/or cache exists for this file
         logpath = os.path.join(FILE_DIRECTORY, fname + ".log")
         if not os.path.isfile(logpath):
@@ -350,13 +348,22 @@ class downloader():
             cache = open(cachepath, "r+b")
 
         dead_peers = []
+        downloading = []
+        message_queue = {}
+        lock = threading.Lock()
+
+        # Start 
 
         while downloader.size_remaining(log, tracker) > 0:
-            peer, start, size = downloader.next_bytes(log, tracker, dead_peers)
-            if not peer:
-                time.sleep(0.5)
+            if len(downloading) < 5:
+                peer, start, size = downloader.next_bytes(log, tracker, lock, downloading, dead_peers)
+                if not peer:
+                    time.sleep(0.5)
 
-                continue
+                    continue
+
+                message = "<GET SEG {} {} {}>".format(file, start_byte, end_byte)
+                message_queue
             try:
                 chunk = self.get(apiutils.arg_encode(fname), start, size, str(peer[0]), peer[1])
             except ConnectionRefusedError as err:
@@ -507,13 +514,14 @@ class downloader():
 
         return filesize - cachesize
 
-    def next_bytes(log, tracker, failed_peers = ()):
+    def next_bytes(log, tracker, lock, downloading, failed_peers):
         """ Determines which chunk should be downloaded next for the given trackerfile
 
         As per the specification:
             Segment selection: The to-be-downloaded segment(s) is (are) chosen sequentially.
             Peer selection: The peer which has the newest timestamp is selected to be connected to
         """
+        lock.acquire()
         peers = (tracker[4])
         freq = dict()
 
@@ -521,23 +529,25 @@ class downloader():
         peer_list = sorted(peers.keys(), key=lambda k: int(peers[k][0]))
 
         start_byte, end_byte = None, None
-
         for peer in peer_list:
             if peer not in failed_peers:
                 peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
                 
                 needed = True
-                for entry in log:
-                    if entry[0] <= peer_start and entry[1] >= peer_end:
+                for entry in downloader.merged(log + downloading):
+                    start, end = entry
+                    if start <= peer_start and end >= peer_end:
                         needed = False
                         break
                     else:
-                        if entry[1] >= peer_start and entry[1] < peer_end:
-                            start_byte = entry[1]
+                        if end < peer_end and end >= peer_start:
+                            start_byte = end
+                            break
                 if needed:
-                    if start_byte == None:
+                    if not log or log[0][1] == 0:
                         start_byte = peer_start
-                    break
+                    if start_byte:
+                        break
 
         # Sort by peer timestamp
         peer_list = list(reversed(sorted(peers.keys(), key=lambda k: peers[k][2])))
@@ -549,11 +559,13 @@ class downloader():
 
                     if start_byte >= peer_start and start_byte <= peer_end:
                         end_byte = min(CHUNK_SIZE, peer_end - start_byte + 1)
-
+                        lock.release()
+                        downloading.append((start_byte, end_byte))
                         return (peer, start_byte, end_byte)
 
 
         print("Could not find peer with useful chunk")
+        lock.release()
         return (None, None, None)
 
 
@@ -578,6 +590,27 @@ class downloader():
                 
 
                 return True
+
+    def merged(log):
+        """ Merge adjacent log entries
+
+        Parameters:
+            log: list of (start_byte, end_byte) tuples
+        """
+        merg = sorted(log[:])
+        
+        i = 0
+        while i < len(merg) - 1:
+            start1, end1 = merg[i]
+            start2, end2 = merg[i + 1]
+            if end1 >= start2 and end1 <= end2:
+                merg[i] = (start1, end2)
+                del merg[i+1]
+                continue
+            i += 1
+
+        return merg
+
 
 
 
