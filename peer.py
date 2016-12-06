@@ -374,6 +374,7 @@ class downloader():
 
                     if event_type == selectors.EVENT_WRITE:
                         payload = "<GET SEG {} {} {}>".format(*data)
+                        #print(payload)
                         failed = False
                         try:
                             sock.send(bytes(payload, *apiutils.encoding_defaults))
@@ -410,6 +411,7 @@ class downloader():
                                 #print("Downloaded bytes {} to {} of {}".format(data[1], data[1] + data[2], data[0]))
                             else:
                                 print("Error - incorrect size!")
+                                dead_peers.append(peer)
                                 time.sleep(0.5)
                         else:
                             print("Error. {}".format(apiutils.arg_decode(chunk)))
@@ -426,7 +428,7 @@ class downloader():
                     if downloader.gettracker(tracker[0], thost, tport):
                         fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
                         tracker = trackerfile.trackerfile.fromPath(fpath)
-                        time.sleep(5)
+                        dead_peers = []
 
                 continue
             
@@ -437,6 +439,7 @@ class downloader():
                         lastupdate = time.time()
                         fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
                         tracker = trackerfile.trackerfile.fromPath(fpath)
+                        dead_peers = []
                         break
                 if len(downloading) > 8: 
                     break
@@ -796,9 +799,10 @@ class interpreter(cmd.Cmd):
         """ Sends a gettracker API command to the server
         """
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
-        if downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
-            # Tell the downloader thread that there is a new tracker file
-            self.download_queue.put("NEW {}.track".format(parse.fname))
+        while not downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
+            time.sleep(10)
+        # Tell the downloader thread that there is a new tracker file
+        self.download_queue.put("NEW {}.track".format(parse.fname))
 
     def do_GET(self, line):
         """ Sends a GET API command to a peer
