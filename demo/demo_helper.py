@@ -38,7 +38,7 @@ def waiter(waitTil, inc=5):
     while( time.time() < target ):
         diff = target - time.time()
         
-        if inc < seconds() - last:
+        if inc <= seconds() - last:
             print("t = {} sec".format(seconds()))
             last = seconds()
         
