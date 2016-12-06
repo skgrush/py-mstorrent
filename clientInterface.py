@@ -23,6 +23,7 @@ class clientInterface():
         self.user_input = curses.newwin(1, x, y-1, 0)
         self.pad = curses.newpad(self.py, self.px)
         self.linecount = 0
+        self.successes = 0
 
         # Create threads and message queue
         self.queue = multiprocessing.Queue()
@@ -52,6 +53,7 @@ class clientInterface():
     def input_loop(self):
         """ Gathers keyboard input from the user and sends it to the command interpreter upon pressing enter
         """
+        
         y, x = self.user_input.getbegyx()[0], self.user_input.getmaxyx()[1]
         self.user_input.keypad(1)
 
@@ -149,7 +151,13 @@ class clientInterface():
 
                 self.scrolly = max(0, self.linecount - y + 2)
 
-                self.pad.addstr(self.linecount % (py - 1), 0, str(line))
+                try:
+                    self.pad.addstr(self.linecount % (py - 1), 0, str(line))
+                    if 'Finished downloading ' in msg:
+                        self.successes += 1
+                        self.pad.bkgd(' ', curses.color_pair(1 + self.successes))
+                except Exception:
+                    pass
                 self.linecount += newlines
 
                 

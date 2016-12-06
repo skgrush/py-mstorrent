@@ -875,6 +875,11 @@ cmds["GET"].add_argument("port", type=int, help="Peer port")
 
 def main(stdscr, demo_module=None, config_name=None):
     global thost, tport, FILE_DIRECTORY, UPDATE_INTERVAL
+    if curses.has_colors():
+            curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
+            curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_GREEN)
+            curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE)
+
 
     # Read the config
     config_file = config_name or (sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg")
