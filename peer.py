@@ -412,8 +412,8 @@ class downloader():
                             # Request an updated tracker file
 
             chunk_queue = downloader.next_bytes(log, tracker, downloading, dead_peers)
-            if not chunk_queue:
-                # No useful chunks to download... try updating the tracker
+            if not chunk_queue and not downloading:
+                # No useful chunks to download... try checking for tracker updates
                 if downloader.gettracker(tracker[0], thost, tport):
                     fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
                     tracker = trackerfile.trackerfile.fromPath(fpath)
@@ -801,6 +801,9 @@ class interpreter(cmd.Cmd):
         print("Requesting list of tracker files from tracker {}:{}".format(host, port))
         response = networkutil.send(host, port, "<REQ LIST>")
         print(response)
+
+    def write(self, msg):
+        print(msg)
 
 class stdioverride():
     """ Assign stdout to an instance of this class so that output is sent to 
