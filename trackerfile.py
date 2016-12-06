@@ -318,7 +318,12 @@ class trackerfile(tuple):
             update_interval (int, optional): the amount of time in seconds
                 after which a peer should be forgotten. Defaults to
                 :const:`trackerfile.PEER_UPDATE_INTERVAL`.
+        
+        Returns:
+            bool: True if changes were made, otherwise False.
         """
+        
+        changed = False
         
         #threshold for dropping peers
         thresh = datetime.datetime.utcnow() - \
@@ -326,6 +331,7 @@ class trackerfile(tuple):
         
         for peer, values in self._peers.items():
             if values[2] < thresh:
+                changed = True
                 self.removePeer( *peer )
     
     
