@@ -40,11 +40,4 @@ demo = PeerDemo('REQ', 'createtracker small.file "This file is small"')
 # built-in delay to let server start up
 time.sleep(3)
 
-ttl = 120 - seconds()
-
-try:
-    with timeout(seconds=ttl):
-        curses.wrapper(peer.main, demo, confpath)
-
-except TimeoutError:
-    exit(0)
+curses.wrapper(peer.main, demo, confpath)
