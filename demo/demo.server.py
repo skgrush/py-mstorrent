@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
+"""py-mstorrent Demo Server Script
+
+Peer 1 Expectations:
+ * Started at time = 0
+ * continue hosting .track files
+"""
 
 import sys
 import os
 import os.path
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath( __file__ ))
-MY_WORKING_DIR = os.getcwd()
-WORKING_DIR = os.path.realpath( os.path.join( MY_WORKING_DIR, '..' ) )
-SRC_DIR = os.path.realpath(os.path.join( SCRIPT_DIR, '../' ))
+from demo_helper import WORKING_DIR, SRC_DIR
 sys.path.insert(0, SRC_DIR)
 
 import server
