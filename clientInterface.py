@@ -26,7 +26,7 @@ class clientInterface():
 
         # Create threads and message queue
         self.queue = multiprocessing.Queue()
-        self.inp = threading.Thread(name="input_recv", target=self.input_loop)
+        self.inp = threading.Thread(name="input_recv", target=self.input_loop, daemon=True)
         self.receiver = threading.Thread(name="msg_recv", target=self.writer, daemon=True)
 
 
