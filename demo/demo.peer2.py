@@ -9,7 +9,8 @@ Peer 2 Expectations:
  * some time after t=90s, terminate
 """
 
-from demo_helper import START_TIME, WORKING_DIR, MY_WORKING_DIR, SRC_DIR, PeerDemo
+from demo_helper import START_TIME, WORKING_DIR, MY_WORKING_DIR, SRC_DIR, \
+                        PeerDemo, timeout, seconds
 
 import curses
 import time
@@ -39,4 +40,11 @@ demo = PeerDemo('REQ', 'createtracker large.file "This file is LARGE"')
 # built-in delay to let server start up
 time.sleep(3)
 
-curses.wrapper(peer.main, demo, confpath)
+ttl = 120 - seconds()
+
+try:
+    with timeout(seconds=ttl):
+        curses.wrapper(peer.main, demo, confpath)
+
+except TimeoutError:
+    exit(0)
