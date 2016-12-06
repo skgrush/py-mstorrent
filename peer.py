@@ -130,9 +130,6 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         
         super(PeerServer, self).__init__(address, RequestHandlerClass,
                                             bind_and_activate)
-    
-    def STOP_IT(self):
-        self.shutdown()
 
     @property
     def torrents_dir(self):
@@ -900,7 +897,7 @@ def main(stdscr):
 
     # Shut down
     my_peer.download.queue.put("EXIT")
-    my_peer.srv.STOP_IT()
+    my_peer.srv.shutdown()
     print("Server thread ended.")
 
 if __name__ == "__main__":
