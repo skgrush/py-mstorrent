@@ -176,13 +176,41 @@ class peer():
         self.downloader = multiprocessing.Process(target = self.download.spawn)
 
         # Update the server about all the files you are hosting and periodically send updates (todo)
+        self.refresher = threading.Thread(name="refresher", target=peer.server_refresher, daemon=True)
 
     def begin(self):
         """ Begin job-2 and job-3, the chunk server and downloader processes
         """
         self.server.start()
         self.downloader.start()
+        self.refresher.start()
         pass
+
+    def server_refresher():
+        while True:
+            try:
+                trackerfiles = [ os.path.join(FILE_DIRECTORY, f) for f in os.listdir(FILE_DIRECTORY) if os.path.isfile(os.path.join(FILE_DIRECTORY, f)) ]
+            except Exception as err:
+                print(err)
+                return
+
+            # Update the server with each log file
+            for file in trackerfiles:
+                if file[-4:].lower() == ".log":
+                    log = []
+                    with open(file, "r+") as logfile:
+                        try:
+                            for line in logfile.readlines():
+                                if line != "":
+                                    start, end = line.split(":")
+                                    log.append((int(start), int(end)))
+                        except Exception as err:
+                            print("Malformed Log File {}. ".format(tracker[0]) + str(err))
+
+                    largest = max(log, key = lambda entry: entry[1] - entry[0])
+                    filename = "".join(file.split("/")[-1].split(".log")[:-1])
+                    downloader.updatetracker(filename, largest[0], largest[1] - 1, thost, tport)
+            time.sleep(UPDATE_INTERVAL)
 
     def createtracker(filename):
         """ Create the supplementary log file for a tracker. 
@@ -810,7 +838,7 @@ cmds["GET"].add_argument("port", type=int, help="Peer port")
 
 
 def main(stdscr):
-    global thost, tport, FILE_DIRECTORY
+    global thost, tport, FILE_DIRECTORY, UPDATE_INTERVAL
 
     # Read the config
     config_file = sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg"
@@ -821,7 +849,8 @@ def main(stdscr):
         
         server_address = (server_ip, server_port)
         FILE_DIRECTORY = config.peerFolder
-        
+        UPDATE_INTERVAL = config.updateInterval
+
         thost, tport = server_ip, server_port
     else:
         print("Problem validating config file '{}'!".format( config_file ))
