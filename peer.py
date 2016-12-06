@@ -881,7 +881,8 @@ def main(stdscr):
 
     # Initialize the server and downloader processes
     try:
-        response = peer.send(peer, *server_address, "<HELLO>")
+        response = peer.send(peer, server_address[0], server_address[1], 
+                             "<HELLO>")
 
         my_peer = peer(config)
 
