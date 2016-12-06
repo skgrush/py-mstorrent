@@ -73,7 +73,7 @@ def start(name, scriptname):
 ## RUNTIME
 ##
 
-if sys.argv[1] in ('clean','--clean'):
+if len(sys.argv)>1 and sys.argv[1] in ('clean','--clean'):
     clean()
     exit(0)
 
