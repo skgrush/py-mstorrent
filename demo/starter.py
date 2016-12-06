@@ -15,26 +15,27 @@ t=90 start: peer9, ..., peer 13
     
 """
 
-
+import sys
 import time
 import os, os.path
 import subprocess
 import glob
 
-from demo_helper import START_TIME, SCRIPT_DIR, WORKING_DIR, seconds, waiter
+from demo_helper import START_TIME, SCRIPT_DIR, seconds, waiter
+WORKING_DIR = os.getcwd()
 
 def clean():
     import shutil
     
     #remove server directory
     server_path = os.path.join(WORKING_DIR,'server')
-    if os.path.isdir( server_path, follow_symlinks=False ):
+    if os.path.isdir( server_path ):
         shutil.rmtree( server_path )
     
     #remove peer directories
     peer_path = os.path.join(WORKING_DIR,'peer{}')
     for i in range(20):
-        if os.path.isdir( peer_path.format(i), follow_symlinks=False ):
+        if os.path.isdir( peer_path.format(i) ):
             shutil.rmtree( peer_path.format(i) )
 
 
@@ -72,12 +73,18 @@ def start(name, scriptname):
 ## RUNTIME
 ##
 
+if sys.argv[1] in ('clean','--clean'):
+    clean()
+    exit(0)
+
+
 for fl in ('confPeers.cfg','confServer.cfg','small.file','large.file'):
     if not os.path.isfile( os.path.join( WORKING_DIR, fl ) ):
         print("\n\nERROR: couldn't find file",fl,"in working directory")
         print("Exiting...")
         exit(1)
 
+clean()
 
 #### T = 0s
 
@@ -88,13 +95,13 @@ start('peer2',  'demo.peer2.py')
 waiter(30)
 #### T = 30s
 
-for i in range(1,8+1):
+for i in range(3,8+1):
     pr = 'peer{}'.format(i)
-    start(pr, 'demo.'+pr+'.py')
+    start(pr, 'demo.peer3etc.py')
 
 waiter(90)
 #### T = 90s
 
 for i in range(9,13+1):
     pr = 'peer{}'.format(i)
-    start(pr, 'demo.'+pr+'.py')
+    start(pr, 'demo.peer3etc.py')

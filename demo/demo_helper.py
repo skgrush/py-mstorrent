@@ -31,15 +31,15 @@ def seconds():
 def waiter(waitTil, inc=5):
     """wait until *waitTil* seconds after START_TIME."""
     
-    target = time.time() + waitTil
+    target = START_TIME + waitTil
     last = 0
     
     while( time.time() < target ):
         diff = target - time.time()
-        t = time.time() - START_TIME
         
-        if inc < t - last:
-            print("t = {} sec".format(int(t)))
+        if inc < seconds() - last:
+            print("t = {} sec".format(seconds()))
+            last = seconds()
         
         if diff < inc:
             time.sleep( diff )

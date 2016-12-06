@@ -20,6 +20,9 @@ import peer
 
 confpath = os.path.join( WORKING_DIR, 'confPeers.cfg' )
 
-demo = Demo('REQ', 'gettracker large.file', 'gettracker small.file')
+if not os.path.isdir( 'peerfolder' ):
+    os.mkdir( 'peerfolder', mode=0o777 )
+
+demo = PeerDemo('REQ', 'gettracker large.file', 'gettracker small.file')
 
 curses.wrapper(peer.main, demo, confpath)
