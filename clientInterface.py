@@ -139,6 +139,12 @@ class clientInterface():
         for line in msg.strip("\r\n").split("\n"):
             try:
                 newlines = 1 + int(len(line.expandtabs()) / px)
+
+                if self.linecount + newlines >= self.py:
+                    self.linecount = 0
+                    self.scrolly = 0
+                    self.pad.erase()
+
                 self.pad.addstr(self.linecount % (py - 1), 0, str(line))
                 self.linecount += newlines
 

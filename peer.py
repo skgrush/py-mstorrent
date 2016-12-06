@@ -6,13 +6,14 @@ from clientInterface import *
 import base64, hashlib
 import cmd, argparse
 import os, sys, time
-import select, socket, socketserver
+import selectors, socket, socketserver
 import apiutils, trackerfile, sillycfg
 
 myip = None
 
 STARTPORT = 11000
 CHUNK_SIZE = 1024
+MAX_DATA_SIZE = 4096
 
 class PeerServerHandler(socketserver.BaseRequestHandler):
     """The request handler for PeerServer.
@@ -28,7 +29,7 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         remain strings.
         """
         
-        data = str(self.request.recv(4096), *apiutils.encoding_defaults)
+        data = str(self.request.recv(MAX_DATA_SIZE), *apiutils.encoding_defaults)
         
         #Retrieve command and args from message
         match = apiutils.re_apicommand.match( data )
@@ -236,7 +237,7 @@ class peer():
         resp = b""
         while True:
             try:
-                data = s.recv(4096)
+                data = s.recv(MAX_DATA_SIZE)
             except Exception as err:
                 print(str(err))
                 break
@@ -349,39 +350,92 @@ class downloader():
 
         dead_peers = []
         downloading = []
-        lock = threading.Lock()
+
+        sel = selectors.DefaultSelector()
+
+        # Make sure the tracker is up to date
+        if downloader.gettracker(tracker[0], thost, tport):
+            fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
+            tracker = trackerfile.trackerfile.fromPath(fpath)
+
 
         # Start 
 
         while downloader.size_remaining(log, tracker) > 0:
-            peer, start, size = downloader.next_bytes(log, tracker, lock, downloading, dead_peers)
-            if not peer:
-                time.sleep(0.5)
+            if downloading:
+                events = sel.select()
+                for event in events:
+
+                    a, event_type = event
+                    sock, y, z, data = a                    
+
+                    if event_type == selectors.EVENT_WRITE:
+                        payload = "<GET SEG {} {} {}>".format(*data)
+                        sock.send(bytes(payload, *apiutils.encoding_defaults))
+
+                        sel.unregister(sock)
+                        sel.register(sock, selectors.EVENT_READ, data)
+                    else:
+
+                        sel.unregister(sock)
+                        resp = b""
+                        while True:
+                            try:
+                                dat = sock.recv(MAX_DATA_SIZE)
+                            except Exception as err:
+                                print(str(err))
+                                break
+                            if not dat:
+                                break
+                            resp += dat
+
+                        sock.close()
+
+                        chunk = bytes.decode(resp, *apiutils.encoding_defaults)
+                        match = apiutils.re_apicommand.match(chunk)
+
+                        if match and match.group(1) == "GET":
+
+                            payload = base64.b64decode(chunk.replace(match.group() + "\n", ""))
+                            if len(payload) == data[2]:
+                                downloader.update(cache, log, logpath, data[1], data[2], payload)
+                                print("Downloaded bytes {} to {} of {}".format(data[1], data[1] + data[2], data[0]))
+                                downloading.remove((data[1], data[1] + data[2]))
+                            else:
+                                print("Error - incorrect size!")
+                                time.sleep(0.5)
+                        else:
+                            print("Error. {}".format(apiutils.arg_decode(chunk)))
+                            dead_peers.append(peer)
+
+                            # Request an updated tracker file
+
+            chunk_queue = downloader.next_bytes(log, tracker, downloading, dead_peers)
+            if not chunk_queue:
+                # No useful chunks to download... try updating the tracker
+                if downloader.gettracker(tracker[0], thost, tport):
+                    fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
+                    tracker = trackerfile.trackerfile.fromPath(fpath)
 
                 continue
-            try:
-                chunk = self.get(apiutils.arg_encode(fname), start, size, str(peer[0]), peer[1])
-            except ConnectionRefusedError as err:
-                print("Dead peer!")
-                dead_peers.append(peer)
-                time.sleep(0.5)
-                continue
-            match = apiutils.re_apicommand.match(chunk)
-            if match and match.group(1) == "GET":
-                payload = base64.b64decode(chunk.replace(match.group() + "\n", ""))
-                if len(payload) == size:
-                    downloader.update(cache, log, logpath, start, size, payload)
-                    print("Downloaded bytes {} to {} of {}".format(start, start + size, fname))
-                else:
-                    print("Error - incorrect size!")
-                    time.sleep(0.5)
-                time.sleep(0.01)
-            else:
-                print("Error. {}".format(apiutils.arg_decode(chunk)))
-                dead_peers.append(peer)
-                time.sleep(0.5)
 
-                # Request an updated tracker file
+            for peer, start, size in chunk_queue:
+                if len(downloading) > 4:
+                    break
+                downloading.append((start, start + size))
+
+                message = (apiutils.arg_encode(fname), start, size)
+
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sel.register(s, selectors.EVENT_WRITE, message)
+                try:
+                    s.connect((str(peer[0]), int(peer[1])))
+                except ConnectionRefusedError:
+                    print("Dead peer!")
+                    dead_peers.append(peer)
+                    downloading.remove((start, start + size))
+                    break
+
 
 
 
@@ -390,6 +444,8 @@ class downloader():
         # Close files
         if not cache.closed:
             cache.close()
+
+        sel.close()
 
         # Check MD5
         try:
@@ -428,7 +484,6 @@ class downloader():
             ip (str): The address of the peer which has the desired chunk
             port (int): The port number of the target peer's chunk server
         """
-        global myip
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         except socket.error as msg:
@@ -441,7 +496,7 @@ class downloader():
         resp = b""
         while True:
             try:
-                data = s.recv(4096)
+                data = s.recv(MAX_DATA_SIZE)
             except Exception as err:
                 print(str(err))
                 break
@@ -459,7 +514,7 @@ class downloader():
         message = "<GET {}.track>".format(apiutils.arg_encode(file))
         
         response = peer.send(peer, host, port, message)
-        print(response)
+        #print(response)
 
         match = apiutils.re_apicommand.match(response)
 
@@ -509,14 +564,13 @@ class downloader():
 
         return filesize - cachesize
 
-    def next_bytes(log, tracker, lock, downloading, failed_peers):
+    def next_bytes(log, tracker, downloading, failed_peers):
         """ Determines which chunk should be downloaded next for the given trackerfile
 
         As per the specification:
             Segment selection: The to-be-downloaded segment(s) is (are) chosen sequentially.
             Peer selection: The peer which has the newest timestamp is selected to be connected to
         """
-        lock.acquire()
         peers = (tracker[4])
         freq = dict()
 
@@ -539,7 +593,7 @@ class downloader():
                             start_byte = end
                             break
                 if needed:
-                    if not log or log[0][1] == 0:
+                    if not downloading and (not log or log[0][1] == 0):
                         start_byte = peer_start
                     if start_byte:
                         break
@@ -552,16 +606,20 @@ class downloader():
                 if peer not in failed_peers:
                     peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
 
-                    if start_byte >= peer_start and start_byte <= peer_end:
-                        end_byte = min(CHUNK_SIZE, peer_end - start_byte + 1)
-                        lock.release()
-                        downloading.append((start_byte, end_byte))
-                        return (peer, start_byte, end_byte)
+                    if start_byte >= peer_start and start_byte < peer_end:
+                        # Queue some chunks from this peer
+
+                        chunk_queue = []
+                        start = start_byte
+                        while start < peer_end and start - start_byte < CHUNK_SIZE * 10:
+                            size = min(CHUNK_SIZE, peer_end - start + 1)
+                            chunk_queue.append((peer, start, size))
+                            start += size
+                        return chunk_queue
 
 
-        print("Could not find peer with useful chunk")
-        lock.release()
-        return (None, None, None)
+        #print("Could not find peer with useful chunk")
+        return None
 
 
     def update(cache, log, logpath, start, size, payload):
