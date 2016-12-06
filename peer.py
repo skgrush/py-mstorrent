@@ -439,7 +439,7 @@ class downloader():
                 sel.register(s, selectors.EVENT_WRITE, message)
                 try:
                     s.connect((str(peer[0]), int(peer[1])))
-                except ConnectionError:
+                except Exception:
                     print("Dead peer {}!".format(peer))
                     dead_peers.append(peer)
                     downloading.remove((start, start + size))
