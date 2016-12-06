@@ -130,9 +130,6 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         
         super(PeerServer, self).__init__(address, RequestHandlerClass,
                                             bind_and_activate)
-    
-    def STOP_IT(self):
-        self.shutdown()
 
     @property
     def torrents_dir(self):
@@ -245,38 +242,6 @@ class peer():
             print(str(err))
 
         return (size, md5.hexdigest())
-
-    def send(self, ip, port, message):
-        """ Sends a message over the network
-
-        Arguments:
-            ip (:class:`~ipaddress.IPv4Address`): The target address
-            port (int): The target port
-            message (str): The message to send to the server
-        """
-        global myip
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except socket.error as msg:
-            print("unable to create socket")
-            return
-
-        s.connect((ip, int(port)))
-        s.send(bytes((message), *apiutils.encoding_defaults))
-        myip = s.getsockname()[0]
-        resp = b""
-        while True:
-            try:
-                data = s.recv(MAX_DATA_SIZE)
-            except Exception as err:
-                print(str(err))
-                break
-            if not data:
-                break
-            resp += data
-
-        s.close()
-        return resp.decode(*apiutils.encoding_defaults)
 
 class downloader():
     """ The chunk downloader
@@ -448,10 +413,11 @@ class downloader():
 
             chunk_queue = downloader.next_bytes(log, tracker, downloading, dead_peers)
             if not chunk_queue:
-                # No useful chunks to download... try updating the tracker
-                if downloader.gettracker(tracker[0], thost, tport):
-                    fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
-                    tracker = trackerfile.trackerfile.fromPath(fpath)
+                # No useful chunks to download... try checking for tracker updates
+                if not downloading:
+                    if downloader.gettracker(tracker[0], thost, tport):
+                        fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
+                        tracker = trackerfile.trackerfile.fromPath(fpath)
 
                 continue
 
@@ -549,7 +515,7 @@ class downloader():
         """
         message = "<GET {}.track>".format(apiutils.arg_encode(file))
         
-        response = peer.send(peer, host, port, message)
+        response = networkutil.send(host, port, message)
         #print(response)
 
         match = apiutils.re_apicommand.match(response)
@@ -568,7 +534,7 @@ class downloader():
         """
         fname = apiutils.arg_encode(file)
         msg = "<updatetracker {} {} {} {} {}>".format(fname, start_byte, end_byte, myip, STARTPORT)
-        response = peer.send(peer, host, port, msg)
+        response = networkutil.send(host, port, msg)
 
         match = apiutils.re_apicommand.match(response)
         if match and match.group("command") == "updatetracker":
@@ -702,7 +668,38 @@ class downloader():
         return merg
 
 
+class networkutil():
+    def send(ip, port, message):
+        """ Sends a message over the network and returns the response
 
+        Arguments:
+            ip (:class:`~ipaddress.IPv4Address`): The target address
+            port (int): The target port
+            message (str): The message to send to the server
+        """
+        global myip
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except socket.error as msg:
+            print("unable to create socket")
+            return
+
+        s.connect((ip, int(port)))
+        s.send(bytes((message), *apiutils.encoding_defaults))
+        myip = s.getsockname()[0]
+        resp = b""
+        while True:
+            try:
+                data = s.recv(MAX_DATA_SIZE)
+            except Exception as err:
+                print(str(err))
+                break
+            if not data:
+                break
+            resp += data
+
+        s.close()
+        return resp.decode(*apiutils.encoding_defaults)
 
 
 
@@ -717,6 +714,13 @@ class interpreter(cmd.Cmd):
         self.stdout = self
         self.download_queue = None
         pass
+
+    def command(self, line):
+        print("> {}".format(line))
+        try:
+            self.onecmd(line)
+        except Exception as err:
+            print(str(err))
 
     def str_to_args(string):
         """ Converts a space and quote-delimited string to a list of arguments,
@@ -765,7 +769,7 @@ class interpreter(cmd.Cmd):
         if fsize > 0:
             message = "<createtracker {} {} {} {} {} {}>".format(fname, fsize, descrip, fmd5, myip, STARTPORT)
             print(message)
-            response = peer.send(peer, (x.host or thost), (x.port or tport), message)
+            response = networkutil.send((x.host or thost), (x.port or tport), message)
         else:
             print("Unable to find file '{}'' or file is empty".format(x.fname))
 
@@ -787,7 +791,7 @@ class interpreter(cmd.Cmd):
         """ Sends a GET API command to a peer
         """
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
-        response = peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size))
+        response = networkutil.send(parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size))
         print(response)
 
     def do_REQ(self, line):
@@ -796,14 +800,20 @@ class interpreter(cmd.Cmd):
         parse = cmds["REQ"].parse_args(interpreter.str_to_args(line))
         host, port = parse.host or thost, parse.port or tport
         print("Requesting list of tracker files from tracker {}:{}".format(host, port))
-        response = peer.send(peer, host, port, "<REQ LIST>")
+        response = networkutil.send(host, port, "<REQ LIST>")
         print(response)
 
+    def write(self, msg):
+        print(msg)
+
 class stdioverride():
+    """ Assign stdout to an instance of this class so that output is sent to 
+        the thread-safe message queue.
+    """
+
     def __init__(self, message_queue):
         self.message_queue = message_queue
 
-    # Override for stdout and stderr, so that output is sent to the thread-safe message queue
     def write(self, msg):
         self.message_queue.put(str(msg))
 
@@ -850,11 +860,11 @@ cmds["GET"].add_argument("host", type=str, help="Peer ip")
 cmds["GET"].add_argument("port", type=int, help="Peer port")
 
 
-def main(stdscr):
+def main(stdscr, demo_module=None, config_name=None):
     global thost, tport, FILE_DIRECTORY, UPDATE_INTERVAL
 
     # Read the config
-    config_file = sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg"
+    config_file = config_name or (sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg")
     config = sillycfg.ClientConfig.fromFile( config_file )
     if config.validate():
         server_port = config.serverPort
@@ -881,8 +891,7 @@ def main(stdscr):
 
     # Initialize the server and downloader processes
     try:
-        response = peer.send(peer, server_address[0], server_address[1], 
-                             "<HELLO>")
+        response = networkutil.send(*server_address, message="<HELLO>")
 
         my_peer = peer(config)
 
@@ -893,6 +902,14 @@ def main(stdscr):
         print("Critical failure in initialization")
         print(err)
 
+    if demo_module:
+
+        try:
+            demo_module.run(commandline)
+        except Exception as err:
+            print("Error when running demo")
+            print(err)
+
     try:
         cli.inp.join()
     except KeyboardInterrupt:
@@ -901,7 +918,7 @@ def main(stdscr):
 
     # Shut down
     my_peer.download.queue.put("EXIT")
-    my_peer.srv.STOP_IT()
+    my_peer.srv.shutdown()
     print("Server thread ended.")
 
 if __name__ == "__main__":
