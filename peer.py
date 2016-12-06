@@ -350,7 +350,7 @@ class downloader():
 
         dead_peers = []
         downloading = []
-
+        excess = 0
         sel = selectors.DefaultSelector()
 
         # Make sure the tracker is up to date
@@ -430,7 +430,14 @@ class downloader():
 
             for peer, start, size in chunk_queue:
                 if len(downloading) > 5:
+                  excess += 1
+                  if excess > 10:
+                    print("That's quite a lot")
+                    if downloader.gettracker(tracker[0], thost, tport):
+                        fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
+                        tracker = trackerfile.trackerfile.fromPath(fpath)
                     break
+                excess = 0
                 downloading.append((start, start + size))
 
                 message = (apiutils.arg_encode(fname), start, size)
@@ -610,7 +617,7 @@ class downloader():
                         break
 
         # Sort by peer timestamp
-        peer_list = list(reversed(sorted(peers.keys(), key=lambda k: peers[k][2])))
+        peer_list = sorted(peers.keys(), key=lambda k: peers[k][2])
 
         if start_byte != None:
             for peer in peer_list:
