@@ -349,21 +349,16 @@ class downloader():
 
         dead_peers = []
         downloading = []
-        message_queue = {}
         lock = threading.Lock()
 
         # Start 
 
         while downloader.size_remaining(log, tracker) > 0:
-            if len(downloading) < 5:
-                peer, start, size = downloader.next_bytes(log, tracker, lock, downloading, dead_peers)
-                if not peer:
-                    time.sleep(0.5)
+            peer, start, size = downloader.next_bytes(log, tracker, lock, downloading, dead_peers)
+            if not peer:
+                time.sleep(0.5)
 
-                    continue
-
-                message = "<GET SEG {} {} {}>".format(file, start_byte, end_byte)
-                message_queue
+                continue
             try:
                 chunk = self.get(apiutils.arg_encode(fname), start, size, str(peer[0]), peer[1])
             except ConnectionRefusedError as err:
