@@ -17,6 +17,8 @@ import os.path
 import urllib.parse
 from ipaddress import IPv4Address,AddressValueError
 
+import fcntl
+
 import trackerfile
 import apiutils
 import sillycfg
@@ -142,7 +144,9 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         #write tracker to file
         with open(tfpath, 'w') as fl:
+            fcntl.lockf( fl, fcntl.LOCK_EX )
             tf.writeTo( fl )
+            fcntl.lockf( fl, fcntl.LOCK_UN )
         
         print("Wrote trackerfile to disk.")
         
@@ -207,7 +211,9 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         
         #write tracker to file
         with open(tfpath, 'w') as fl:
+            fcntl.lockf( fl, fcntl.LOCK_EX )
             tf.writeTo( fl )
+            fcntl.lockf( fl, fcntl.LOCK_UN )
         
         print("Wrote trackerfile to disk.")
         
@@ -285,7 +291,9 @@ class TrackerServerHandler(socketserver.BaseRequestHandler):
         #clean trackerfile
         if tf.clean():
             with open( tfpath, 'w' ) as fl:
+                fcntl.lockf( fl, fcntl.LOCK_EX )
                 tf.writeTo( fl )
+                fcntl.lockf( fl, fcntl.LOCK_UN )
         
         
         #write the tracker file to the socket
