@@ -24,8 +24,27 @@ class PeerDemo:
             cl.command(cmd)
 
 
+def seconds():
+    return int( time.time() - START_TIME )
+
+
 def waiter(waitTil, inc=5):
+    """wait until *waitTil* seconds after START_TIME."""
     
+    target = time.time() + waitTil
     last = 0
     
-    while( 
+    while( time.time() < target ):
+        diff = target - time.time()
+        t = time.time() - START_TIME
+        
+        if inc < t - last:
+            print("t = {} sec".format(int(t)))
+        
+        if diff < inc:
+            time.sleep( diff )
+            return
+        else:
+            time.sleep(1)
+            continue
+

@@ -21,15 +21,7 @@ import os, os.path
 import subprocess
 import glob
 
-# global pseudo-constants
-START_TIME = time.time()
-SCRIPT_DIR = os.path.dirname(os.path.realpath( __file__ ))
-WORKING_DIR = os.getcwd()
-
-
-def seconds():
-    return int( time.time() - START_TIME )
-
+from demo_helper import START_TIME, SCRIPT_DIR, WORKING_DIR, seconds, waiter
 
 def clean():
     import shutil
@@ -87,9 +79,22 @@ for fl in ('confPeers.cfg','confServer.cfg','small.file','large.file'):
         exit(1)
 
 
-print("#### TIME = 0 sec (", seconds(), ")")
+#### T = 0s
 
 start('server', 'demo.server.py')
 start('peer1',  'demo.peer1.py')
 start('peer2',  'demo.peer2.py')
 
+waiter(30)
+#### T = 30s
+
+for i in range(1,8+1):
+    pr = 'peer{}'.format(i)
+    start(pr, 'demo.'+pr+'.py')
+
+waiter(90)
+#### T = 90s
+
+for i in range(9,13+1):
+    pr = 'peer{}'.format(i)
+    start(pr, 'demo.'+pr+'.py')
