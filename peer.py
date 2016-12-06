@@ -243,38 +243,6 @@ class peer():
 
         return (size, md5.hexdigest())
 
-    def send(self, ip, port, message):
-        """ Sends a message over the network
-
-        Arguments:
-            ip (:class:`~ipaddress.IPv4Address`): The target address
-            port (int): The target port
-            message (str): The message to send to the server
-        """
-        global myip
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        except socket.error as msg:
-            print("unable to create socket")
-            return
-
-        s.connect((ip, int(port)))
-        s.send(bytes((message), *apiutils.encoding_defaults))
-        myip = s.getsockname()[0]
-        resp = b""
-        while True:
-            try:
-                data = s.recv(MAX_DATA_SIZE)
-            except Exception as err:
-                print(str(err))
-                break
-            if not data:
-                break
-            resp += data
-
-        s.close()
-        return resp.decode(*apiutils.encoding_defaults)
-
 class downloader():
     """ The chunk downloader
     """
@@ -546,7 +514,7 @@ class downloader():
         """
         message = "<GET {}.track>".format(apiutils.arg_encode(file))
         
-        response = peer.send(peer, host, port, message)
+        response = networkutil.send(host, port, message)
         #print(response)
 
         match = apiutils.re_apicommand.match(response)
@@ -565,7 +533,7 @@ class downloader():
         """
         fname = apiutils.arg_encode(file)
         msg = "<updatetracker {} {} {} {} {}>".format(fname, start_byte, end_byte, myip, STARTPORT)
-        response = peer.send(peer, host, port, msg)
+        response = networkutil.send(host, port, msg)
 
         match = apiutils.re_apicommand.match(response)
         if match and match.group("command") == "updatetracker":
@@ -699,7 +667,38 @@ class downloader():
         return merg
 
 
+class networkutil():
+    def send(ip, port, message):
+        """ Sends a message over the network
 
+        Arguments:
+            ip (:class:`~ipaddress.IPv4Address`): The target address
+            port (int): The target port
+            message (str): The message to send to the server
+        """
+        global myip
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        except socket.error as msg:
+            print("unable to create socket")
+            return
+
+        s.connect((ip, int(port)))
+        s.send(bytes((message), *apiutils.encoding_defaults))
+        myip = s.getsockname()[0]
+        resp = b""
+        while True:
+            try:
+                data = s.recv(MAX_DATA_SIZE)
+            except Exception as err:
+                print(str(err))
+                break
+            if not data:
+                break
+            resp += data
+
+        s.close()
+        return resp.decode(*apiutils.encoding_defaults)
 
 
 
@@ -762,7 +761,7 @@ class interpreter(cmd.Cmd):
         if fsize > 0:
             message = "<createtracker {} {} {} {} {} {}>".format(fname, fsize, descrip, fmd5, myip, STARTPORT)
             print(message)
-            response = peer.send(peer, (x.host or thost), (x.port or tport), message)
+            response = networkutil.send((x.host or thost), (x.port or tport), message)
         else:
             print("Unable to find file '{}'' or file is empty".format(x.fname))
 
@@ -784,7 +783,7 @@ class interpreter(cmd.Cmd):
         """ Sends a GET API command to a peer
         """
         parse = cmds["GET"].parse_args(interpreter.str_to_args(line))
-        response = peer.send(peer, parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size))
+        response = networkutil.send(parse.host, parse.port, "<GET SEG {} {} {}>".format(apiutils.arg_encode(parse.fname), parse.start_byte, parse.chunk_size))
         print(response)
 
     def do_REQ(self, line):
@@ -793,7 +792,7 @@ class interpreter(cmd.Cmd):
         parse = cmds["REQ"].parse_args(interpreter.str_to_args(line))
         host, port = parse.host or thost, parse.port or tport
         print("Requesting list of tracker files from tracker {}:{}".format(host, port))
-        response = peer.send(peer, host, port, "<REQ LIST>")
+        response = networkutil.send(host, port, "<REQ LIST>")
         print(response)
 
 class stdioverride():
@@ -878,7 +877,7 @@ def main(stdscr):
 
     # Initialize the server and downloader processes
     try:
-        response = peer.send(peer, *server_address, "<HELLO>")
+        response = networkutil.send(*server_address, message="<HELLO>")
 
         my_peer = peer(config)
 
