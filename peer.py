@@ -28,7 +28,6 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         using :func:`apiutils.arg_decode` before being passed on, but they
         remain strings.
         """
-        
         data = str(self.request.recv(MAX_DATA_SIZE), *apiutils.encoding_defaults)
         
         #Retrieve command and args from message
@@ -132,6 +131,9 @@ class PeerServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         super(PeerServer, self).__init__(address, RequestHandlerClass,
                                             bind_and_activate)
     
+    def STOP_IT(self):
+        self.shutdown()
+
     @property
     def torrents_dir(self):
         return self.__torrents_dir
@@ -158,7 +160,7 @@ class peer():
 
         while True:
             try:
-                self.srv = PeerServer((myip, STARTPORT), PeerServerHandler)
+                self.srv = PeerServer((myip, STARTPORT), PeerServerHandler, torrents_dir=config.peerFolder)
                 print("Listening on port {}".format(STARTPORT))
             except Exception as err:
                 if 'already in use' in str(err):
@@ -169,13 +171,13 @@ class peer():
             break
 
 
-        self.server = multiprocessing.Process(target = self.srv.serve_forever)
+        self.server = threading.Thread(target = self.srv.serve_forever)
 
         self.child_conn = multiprocessing.Queue()
         self.download = downloader(self.child_conn)
         self.downloader = multiprocessing.Process(target = self.download.spawn)
 
-        # Update the server about all the files you are hosting and periodically send updates (todo)
+        # Update the server about all the files you are hosting and periodically send updates
         self.refresher = threading.Thread(name="refresher", target=peer.server_refresher, daemon=True)
 
     def begin(self):
@@ -209,7 +211,7 @@ class peer():
 
                     largest = max(log, key = lambda entry: entry[1] - entry[0])
                     filename = "".join(file.split("/")[-1].split(".log")[:-1])
-                    downloader.updatetracker(filename, largest[0], largest[1] - 1, thost, tport)
+                    downloader.updatetracker(filename, largest[0], (largest[1] - 1) if largest[1] > 0 else 0, thost, tport)
             time.sleep(UPDATE_INTERVAL)
 
     def createtracker(filename):
@@ -308,7 +310,6 @@ class downloader():
                     break
                 elif msg[0] == "NEW":
                     file = " ".join(msg[1:])
-                    print(file)
                     if file[-6:].lower() == ".track":
                         if os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6])) or os.path.isfile(os.path.join(FILE_DIRECTORY, file[:-6] + ".log")):
                             print("Log file for '{}' already exists, no need to make new download thread".format(file[:-6]))
@@ -316,17 +317,16 @@ class downloader():
                             print("Spawning thread for {}".format(file[:-6]))
                             self.spawn_thread(file)
                 else:
-                    # TODO: Add ability to cancel a download
                     pass
             except Exception:
                 break
 
         for worker in self.workers:
-            # TODO: Send the exit signal
-            pass
+            worker[1].append("DIE")
 
-        #for worker in self.workers:
-        #    worker.join()
+        for worker in self.workers:
+            worker[0].join()
+            print("Download thread for {} ended".format(worker[0].name))
 
         print("Download process ended.")
 
@@ -337,15 +337,16 @@ class downloader():
             file (str): The name of the tracker file
         """
         try:
+            killer = []
             tracker = trackerfile.trackerfile.fromPath(FILE_DIRECTORY + file)
-            worker = threading.Thread(name=file, target=self.download, args=(tracker, ) )
-            self.workers.append(worker)
+            worker = threading.Thread(name=file, target=self.download, args=(tracker, killer) )
+            self.workers.append((worker, killer))
             worker.start()
         except Exception as err:
             print(err)
 
 
-    def download(self, tracker):
+    def download(self, tracker, killer):
         """ Downloads chunks corresponding to the provided tracker file
 
         Arguments:
@@ -390,6 +391,8 @@ class downloader():
         # Start 
 
         while downloader.size_remaining(log, tracker) > 0:
+            if killer:
+                return
             if downloading:
                 events = sel.select()
                 for event in events:
@@ -399,10 +402,15 @@ class downloader():
 
                     if event_type == selectors.EVENT_WRITE:
                         payload = "<GET SEG {} {} {}>".format(*data)
-                        sock.send(bytes(payload, *apiutils.encoding_defaults))
+                        failed = False
+                        try:
+                            sock.send(bytes(payload, *apiutils.encoding_defaults))
+                        except Exception as err:
+                            failed = True
 
                         sel.unregister(sock)
-                        sel.register(sock, selectors.EVENT_READ, data)
+                        if not failed:
+                            sel.register(sock, selectors.EVENT_READ, data)
                     else:
 
                         sel.unregister(sock)
@@ -428,13 +436,13 @@ class downloader():
                             if len(payload) == data[2]:
                                 downloader.update(cache, log, logpath, data[1], data[2], payload)
                                 print("Downloaded bytes {} to {} of {}".format(data[1], data[1] + data[2], data[0]))
-                                downloading.remove((data[1], data[1] + data[2]))
                             else:
                                 print("Error - incorrect size!")
                                 time.sleep(0.5)
                         else:
                             print("Error. {}".format(apiutils.arg_decode(chunk)))
                             dead_peers.append(peer)
+                        downloading.remove((data[1], data[1] + data[2]))
 
                             # Request an updated tracker file
 
@@ -459,7 +467,7 @@ class downloader():
                 try:
                     s.connect((str(peer[0]), int(peer[1])))
                 except ConnectionRefusedError:
-                    print("Dead peer!")
+                    print("Dead peer {}!".format(peer))
                     dead_peers.append(peer)
                     downloading.remove((start, start + size))
                     break
@@ -569,6 +577,7 @@ class downloader():
                 print("Tracker update successful")
                 pass
             else:
+                print(msg)
                 print(match.group("args") + ":" + response)
 
         else:
@@ -883,13 +892,20 @@ def main(stdscr):
         print("Critical failure in initialization")
         print(err)
 
-
-    cli.inp.join()
+    try:
+        cli.inp.join()
+    except KeyboardInterrupt:
+        pass
     curses.curs_set(0)
 
     # Shut down
     my_peer.download.queue.put("EXIT")
-    my_peer.srv.shutdown()
+    my_peer.srv.STOP_IT()
+    print("Server thread ended.")
 
 if __name__ == "__main__":
     curses.wrapper(main)
+    sys.stdout = sys.__stdout__
+    print("Received EXIT signal. All processes terminated.")
+
+    
