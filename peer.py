@@ -412,11 +412,12 @@ class downloader():
                             # Request an updated tracker file
 
             chunk_queue = downloader.next_bytes(log, tracker, downloading, dead_peers)
-            if not chunk_queue and not downloading:
+            if not chunk_queue:
                 # No useful chunks to download... try checking for tracker updates
-                if downloader.gettracker(tracker[0], thost, tport):
-                    fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
-                    tracker = trackerfile.trackerfile.fromPath(fpath)
+                if not downloading:
+                    if downloader.gettracker(tracker[0], thost, tport):
+                        fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
+                        tracker = trackerfile.trackerfile.fromPath(fpath)
 
                 continue
 
