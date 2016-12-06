@@ -5,7 +5,7 @@
 from clientInterface import *
 import base64, hashlib
 import cmd, argparse
-import os, sys, time
+import os, sys, time, random
 import selectors, socket, socketserver
 import apiutils, trackerfile, sillycfg
 
@@ -69,7 +69,7 @@ class PeerServerHandler(socketserver.BaseRequestHandler):
         if seg != "SEG":
             print("GET Error: {}".format(seg))
             return self.exception("BadRequest", "'SEG' expected")
-        print("Received request for '{}', starting from byte {} with chunk size {}".format(fname, start_byte, chunk_size))
+        #print("Received request for '{}', starting from byte {} with chunk size {}".format(fname, start_byte, chunk_size))
         if int(chunk_size) > CHUNK_SIZE:
             return self.request.sendall(b"<GET invalid>\n")
         
@@ -165,6 +165,7 @@ class peer():
             try:
                 self.srv = PeerServer((myip, STARTPORT), PeerServerHandler, torrents_dir=config.peerFolder)
                 print("Listening on port {}".format(STARTPORT))
+                
             except Exception as err:
                 if 'already in use' in str(err):
                     STARTPORT += 1
@@ -326,6 +327,7 @@ class downloader():
         """
         fname = tracker[0]
         log = []
+        INTERVAL = 3
 
         # Check if a log and/or cache exists for this file
         logpath = os.path.join(FILE_DIRECTORY, fname + ".log")
@@ -350,7 +352,6 @@ class downloader():
 
         dead_peers = []
         downloading = []
-        excess = 0
         sel = selectors.DefaultSelector()
 
         # Make sure the tracker is up to date
@@ -360,7 +361,7 @@ class downloader():
 
 
         # Start 
-
+        lastupdate = time.time()
         while downloader.size_remaining(log, tracker) > 0:
             if killer:
                 return
@@ -420,24 +421,25 @@ class downloader():
             chunk_queue = downloader.next_bytes(log, tracker, downloading, dead_peers)
             if not chunk_queue:
                 # No useful chunks to download... try checking for tracker updates
-                if not downloading:
+                if not downloading and time.time() - lastupdate > INTERVAL:
+                    lastupdate = time.time()
                     if downloader.gettracker(tracker[0], thost, tport):
                         fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
                         tracker = trackerfile.trackerfile.fromPath(fpath)
                         time.sleep(5)
 
                 continue
+            
 
             for peer, start, size in chunk_queue:
-                if len(downloading) > 5:
-                  excess += 1
-                  if excess > 10:
-                    print("That's quite a lot")
+                if len(downloading) > 3 and time.time() - lastupdate > INTERVAL:
                     if downloader.gettracker(tracker[0], thost, tport):
+                        lastupdate = time.time()
                         fpath = os.path.join(FILE_DIRECTORY, tracker[0] + ".track")
                         tracker = trackerfile.trackerfile.fromPath(fpath)
+                        break
+                if len(downloading) > 8: 
                     break
-                excess = 0
                 downloading.append((start, start + size))
 
                 message = (apiutils.arg_encode(fname), start, size)
@@ -593,33 +595,27 @@ class downloader():
         freq = dict()
 
         # Sort by start byte
-        peer_list = sorted(peers.keys(), key=lambda k: int(peers[k][0]))
+        peer_list = sorted(peers.keys(), key=lambda k: 1)
 
         start_byte, end_byte = None, None
         for peer in peer_list:
             if peer not in failed_peers:
                 peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
-                
-                needed = True
                 for entry in downloader.merged(log + downloading):
                     start, end = entry
                     if start <= peer_start and end >= peer_end:
-                        needed = False
                         break
                     else:
                         if end < peer_end and end >= peer_start:
                             start_byte = end
                             break
-                if needed:
-                    if not downloading and (not log or log[0][1] == 0):
-                        start_byte = peer_start
-                    if start_byte:
-                        break
 
-        # Sort by peer timestamp
-        peer_list = sorted(peers.keys(), key=lambda k: peers[k][2])
 
         if start_byte != None:
+
+            # Sort by peer timestamp
+            peer_list = sorted(peers.keys(), key=lambda k: peers[k][2])
+
             for peer in peer_list:
                 if peer not in failed_peers:
                     peer_start, peer_end = int(peers[peer][0]), int(peers[peer][1])
@@ -631,6 +627,8 @@ class downloader():
                         start = start_byte
                         while start < peer_end and start - start_byte < CHUNK_SIZE * 10:
                             size = min(CHUNK_SIZE, peer_end - start + 1)
+                            if size == 0:
+                                continue
                             chunk_queue.append((peer, start, size))
                             start += size
                             break
@@ -880,6 +878,7 @@ def main(stdscr, demo_module=None, config_name=None):
 
     # Read the config
     config_file = config_name or (sys.argv[1] if len(sys.argv) > 1 else "./clientThreadConfig.cfg")
+
     config = sillycfg.ClientConfig.fromFile( config_file )
     if config.validate():
         server_port = config.serverPort
@@ -887,6 +886,8 @@ def main(stdscr, demo_module=None, config_name=None):
         
         server_address = (server_ip, server_port)
         FILE_DIRECTORY = config.peerFolder
+
+        
         UPDATE_INTERVAL = config.updateInterval
 
         thost, tport = server_ip, server_port
@@ -903,6 +904,10 @@ def main(stdscr, demo_module=None, config_name=None):
     sys.stdout = stdout
     sys.stderr = stdout
     clientInterface.begin(cli)
+
+    # Rename the window
+    cwd = os.getcwd().split("/")[-1]
+    os.system('echo -n -e "\x1b]0;{}\x07"'.format(cwd))
 
     # Initialize the server and downloader processes
     try:
