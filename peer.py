@@ -790,6 +790,10 @@ class interpreter(cmd.Cmd):
         response = peer.send(peer, host, port, "<REQ LIST>")
         print(response)
 
+class stdioverride():
+    def __init__(self, message_queue):
+        self.message_queue = message_queue
+
     # Override for stdout and stderr, so that output is sent to the thread-safe message queue
     def write(self, msg):
         self.message_queue.put(str(msg))
@@ -861,9 +865,9 @@ def main(stdscr):
     commandline = interpreter()
 
     cli = clientInterface(stdscr, commandline)
-    commandline.message_queue = cli.queue
-    sys.stdout = commandline
-    sys.stderr = commandline
+    stdout = stdioverride(cli.queue)
+    sys.stdout = stdout
+    sys.stderr = stdout
     clientInterface.begin(cli)
 
     # Initialize the server and downloader processes

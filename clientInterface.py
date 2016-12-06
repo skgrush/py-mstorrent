@@ -77,9 +77,9 @@ class clientInterface():
 
             # Enter Key
             elif k == 10 or k == curses.KEY_ENTER:
-                self.queue.put("> " + input_str)
+                print("> " + input_str)
                 if input_str.lower() in ("quit", "exit"):
-                    self.queue.put("Received EXIT signal, waiting on remaining processes...")
+                    print("Received EXIT signal, waiting on remaining processes...")
                     break
                 self.user_input.clear()
                 self.send_command(input_str)
@@ -107,7 +107,7 @@ class clientInterface():
                 try:
                     input_str += chr(k)
                 except Exception:
-                    self.queue.put(k)
+                    print(k)
 
             # Bound scroll area
             self.scrollx = max(min(self.px - x, self.scrollx), 0)
@@ -133,10 +133,12 @@ class clientInterface():
         """
         if curses.isendwin():
             return
-
+        if msg == "\n":
+            return
         y, x = self.stdscr.getmaxyx()
         py, px = self.pad.getmaxyx()
         for line in msg.strip("\r\n").split("\n"):
+
             try:
                 newlines = 1 + int(len(line.expandtabs()) / px)
 
@@ -165,4 +167,4 @@ class clientInterface():
         try:
             self.commands.onecmd(msg)
         except Exception as err:
-            self.queue.put(str(err))
+            print(str(err))
