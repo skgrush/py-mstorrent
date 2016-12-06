@@ -147,11 +147,12 @@ class clientInterface():
                     self.scrolly = 0
                     self.pad.erase()
 
+                self.scrolly = max(0, self.linecount - y + 2)
+
                 self.pad.addstr(self.linecount % (py - 1), 0, str(line))
                 self.linecount += newlines
 
-                if self.linecount == y + self.scrolly + (newlines - 1):
-                    self.scrolly += 1
+                
 
                 self.draw_pad()
             except Exception as err:

@@ -406,7 +406,7 @@ class downloader():
                             payload = base64.b64decode(chunk.replace(match.group() + "\n", ""))
                             if len(payload) == data[2]:
                                 downloader.update(cache, log, logpath, data[1], data[2], payload)
-                                print("Downloaded bytes {} to {} of {}".format(data[1], data[1] + data[2], data[0]))
+                                #print("Downloaded bytes {} to {} of {}".format(data[1], data[1] + data[2], data[0]))
                             else:
                                 print("Error - incorrect size!")
                                 time.sleep(0.5)
@@ -547,14 +547,15 @@ class downloader():
         if match and match.group("command") == "updatetracker":
             if "succ" in (match.group("args")):
                 # it updated successfully
-                print("Tracker update successful")
+                #print("Tracker update successful")
                 pass
             else:
-                print(msg)
-                print(match.group("args") + ":" + response)
+                pass
+                #print(match.group("args") + ":" + response)
 
         else:
-            print(response)
+            #print(response)
+            pass
 
         return response
 
