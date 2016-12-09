@@ -1,6 +1,4 @@
 
-echo $(srcdir)
-
 .PHONY: clean clean-pyc torrentsdir
 
 
@@ -27,10 +25,12 @@ tracker: torrentsdir
 cp_preq: $(cp ../$(preq) .)
 
 
+peer_preq = clientInterface.py apiutils.py trackerfile.py sillycfg.py \
+            clientThreadConfig.cfg
 
 peer%: 
 	mkdir ./$@
-	for preq in apiutils.py trackerfile.py sillycfg.py ; do \
+	for preq in $(peer_preq) ; do \
 		cp ./$$preq ./$@/$$preq ; \
 	done
 	cp ./peer.py ./$@/peer
