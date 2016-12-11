@@ -23,7 +23,7 @@ import trackerfile
 import apiutils
 import sillycfg
 
-
+flock = threading.Lock()
 
 class TrackerServerHandler(socketserver.BaseRequestHandler):
     """The request handler for TrackerServer.

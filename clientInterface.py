@@ -155,7 +155,7 @@ class clientInterface():
                     self.pad.addstr(self.linecount % (py - 1), 0, str(line))
                     if 'Finished downloading ' in msg:
                         self.successes += 1
-                        self.pad.bkgd(' ', curses.color_pair(1 + self.successes))
+                        self.pad.bkgd(' ', curses.color_pair((1 + self.successes) % 4))
                 except Exception:
                     pass
                 self.linecount += newlines

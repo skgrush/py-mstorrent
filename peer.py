@@ -799,10 +799,11 @@ class interpreter(cmd.Cmd):
         """ Sends a gettracker API command to the server
         """
         parse = cmds["gettracker"].parse_args(interpreter.str_to_args(line))
-        while not downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
-            time.sleep(10)
-        # Tell the downloader thread that there is a new tracker file
-        self.download_queue.put("NEW {}.track".format(parse.fname))
+        if downloader.gettracker(parse.fname, parse.host or thost, parse.port or tport):
+            # Tell the downloader thread that there is a new tracker file
+            self.download_queue.put("NEW {}.track".format(parse.fname))
+        else:
+            print("Please try again")
 
     def do_GET(self, line):
         """ Sends a GET API command to a peer
