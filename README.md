@@ -32,3 +32,8 @@ You can configure the peer and server with the config files
 ```
 
 In the command line interface, type `help` to see the commands you can use.
+
+### Final Submission usage:
+
+Use `make` **from the source directory** to build the project. This will
+create a `./tracker` executable and three peer directories containing `./peer`.
